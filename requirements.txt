@@ -175,3 +175,13 @@ yellowbrick==1.5
 yfinance==0.2.43
 zict==3.0.0
 zipp==3.20.1
+
+# Rag agent requirments
+langchain
+langchain-ollama
+streamlit
+langchain_experimental
+faiss-cpu
+pymupdf
+sentence-transformers
+langchain_community
