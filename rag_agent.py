@@ -115,14 +115,12 @@ class RAG_Agent():
             retriever=self.retriever)
     
         while True:
-            # Capture user input from the terminal
             question = input("Enter your question (or type 'exit' to quit): ").strip()
             
             if question.lower() == 'exit':
                 print("Exiting the application. Goodbye!")
                 break
     
-            # Check if the query is relevant to the document content
             doc_result, relevance_score = get_relevant_document(question, retriever)
     
             if doc_result:
