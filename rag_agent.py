@@ -106,6 +106,9 @@ class RAG_Agent():
         return None, 0.0
     
     def run(self):
+        if not self.retriever:
+            return
+
         # This is deprecated according to langchain docs
         # please migrate it to the new API
         # https://python.langchain.com/v0.2/docs/versions/migrating_chains/retrieval_qa/
@@ -115,6 +118,8 @@ class RAG_Agent():
             retriever=self.retriever)
     
         while True:
+            # We'll need to change this as time goes on as we won't
+            # get user input this way.
             question = input("Enter your question (or type 'exit' to quit): ").strip()
             
             if question.lower() == 'exit':
