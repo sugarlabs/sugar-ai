@@ -1,4 +1,5 @@
 # Pippy's AI-Coding Assistant
+# Date: 2023-02-15
 # Uses Llama3.1 model from Ollama
 
 import os
