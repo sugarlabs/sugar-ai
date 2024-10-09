@@ -17,8 +17,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # Document paths
 document_paths = [
-    '/home/kshitij/Downloads/Sugarlabs/Pippy-Activity/Pygame Documentation.pdf',
-    '/home/kshitij/Downloads/AI-model/Python GTK+3 Documentation.pdf',
+    './docs/Pygame Documentation.pdf',
+    './docs/Python GTK+3 Documentation.pdf',
+    './docs/Sugar Toolkit Documentation.pdf'
 ]
 
 # Revised Prompt Template to avoid mentioning the source
