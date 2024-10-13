@@ -35,8 +35,11 @@ Answer: Let's think step by step.
 
 
 class RAG_Agent:
-    def __init__(self):
-        self.model = None
+    def __init__(self, model="llama3.1"):
+        """
+        Initialize the RAG agent with a default model like Llama3.1.
+        """
+        self.model = OllamaLLM(model=model)
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
@@ -135,7 +138,6 @@ class RAG_Agent:
 
 if __name__ == "__main__":
     agent = RAG_Agent()
-    agent.set_model("llama3.1")  
     agent.retriever = agent.setup_vectorstore(document_paths)  
     agent.run()
 
