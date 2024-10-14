@@ -43,10 +43,6 @@ class RAG_Agent:
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
-    def set_model(self, model="llama3.1"):
-        """Set the Llama 3.1 model from Ollama."""
-        self.model = OllamaLLM(model=model)
-
     def get_model(self):
         """Return the LLM model."""
         return self.model
