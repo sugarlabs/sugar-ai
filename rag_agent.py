@@ -36,19 +36,14 @@ Answer: Let's think step by step.
 
 class RAG_Agent:
     def __init__(self, model="llama3.1"):
-        """
-        Initialize the RAG agent with a default model like Llama3.1.
-        """
         self.model = OllamaLLM(model=model)
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
     def set_model(self, model):
-        """To Set a new model if needed."""
         self.model = OllamaLLM(model=model)
 
     def get_model(self):
-        """Return the LLM model."""
         return self.model
     
     # Loading the docs for retrieval in Vector Database
@@ -105,8 +100,6 @@ class RAG_Agent:
 
 
     def run(self):
-        """Run the main logic of the RAG agent."""
-        
         # Format documents for context
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
