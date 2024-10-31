@@ -135,7 +135,7 @@ toml==0.10.2
 tomli==2.0.1
 tomlkit==0.13.2
 toolz==0.12.1
-torch @ https://download.pytorch.org/whl/cu121_full/torch-2.4.0%2Bcu
+torch==2.4.1
 triton==3.0.0
 trl==0.10.1
 tweepy==4.14.0
@@ -176,12 +176,15 @@ yfinance==0.2.43
 zict==3.0.0
 zipp==3.20.1
 
-# Rag agent requirments
+# Rag agent requirements
 langchain
 langchain-ollama
 streamlit
 langchain_experimental
-faiss-cpu
-pymupdf
-sentence-transformers
+faiss-cpu==1.9.0
+Pymupdf
+sentence-transformers==3.1.1
 langchain_community
+ollama==0.3.3
+huggingface-hub==0.25.2
+transformers==4.45.2
