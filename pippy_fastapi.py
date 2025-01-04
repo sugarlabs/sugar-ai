@@ -1,5 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request, APIRouter
 from pydantic import BaseModel
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -34,20 +33,10 @@ Question: {question}
 Answer: Let's think step by step.
 """
 
-# Initialize FastAPI
-app = FastAPI()
+router=APIRouter()
 
-# Enable CORS middleware for frontend interaction
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Replace "*" with specific domains if needed
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Define the RAG Agent class
-class RAG_Agent:
+# Define the Pippy RAG Agent class
+class Pippy_RAG_Agent:
     def __init__(self, model="llama3.1"):
         self.model = OllamaLLM(model=model)
         self.retriever = None
@@ -164,28 +153,24 @@ class RAG_Agent:
             response = self.model.invoke(question)
         return response
 
-# Define a query model for incoming POST requests
-class QueryModel(BaseModel):
+# Define a class query  for incoming POST requests
+class Query(BaseModel):
     question: str
 
-# Initialize the RAG Agent and set up the retriever
-agent = RAG_Agent()
+# Initialize the Pippy RAG Agent and set up the retriever
+agent = Pippy_RAG_Agent()
 agent.setup_vectorstore(document_paths)
 
 # Define API routes
-@app.get("/")
+@router.get("/")
 async def root():
     return {"message": "Welcome to the AI Coding Assistant!"}
 
-@app.post("/query/")
-async def handle_query(query: QueryModel, request: Request):
+@router.post("/query/")
+async def handle_query(query: Query, request: Request):
     try:
         response = agent.run(query.question)
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Run the FastAPI server
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
