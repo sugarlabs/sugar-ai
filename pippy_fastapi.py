@@ -33,9 +33,8 @@ Question: {question}
 Answer: Let's think step by step.
 """
 
-router=APIRouter()
+router = APIRouter()
 
-# Define the Pippy RAG Agent class
 class Pippy_RAG_Agent:
     def __init__(self, model="llama3.1"):
         self.model = OllamaLLM(model=model)
@@ -153,20 +152,18 @@ class Pippy_RAG_Agent:
             response = self.model.invoke(question)
         return response
 
-# Define a class query  for incoming POST requests
 class Query(BaseModel):
     question: str
 
-# Initialize the Pippy RAG Agent and set up the retriever
 agent = Pippy_RAG_Agent()
 agent.setup_vectorstore(document_paths)
 
 # Define API routes
 @router.get("/")
 async def root():
-    return {"message": "Welcome to the AI Coding Assistant!"}
+    return {"message": "Welcome to Pippy AI Assistant"}
 
-@router.post("/query/")
+@router.post("/query")
 async def handle_query(query: Query, request: Request):
     try:
         response = agent.run(query.question)
