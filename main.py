@@ -4,14 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from chat.router import router as chat_router
-from pippy.router import router as piggy_router
+from pippy.router import router as pippy_router
 
 app = FastAPI(
     docs_url="/sugar-ai/docs",
 )
 
 app.include_router(chat_router, prefix="/sugar-ai/chat")
-app.include_router(piggy_router, prefix="/sugar-ai/piggy")
+app.include_router(pippy_router, prefix="/sugar-ai/piggy")
 
 app.add_middleware(
     CORSMiddleware,
