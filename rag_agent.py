@@ -1,22 +1,15 @@
 # Pippy's AI-Coding Assistant
-# Uses Llama3.1 model from Ollama
+# Uses a model from HuggingFace
 
 import os
-import warnings
+import argparse
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_ollama.llms import OllamaLLM
 from langchain.prompts import ChatPromptTemplate
-
-# Document paths loaded in the RAG model
-document_paths = [
-    './docs/Pygame Documentation.pdf',
-    './docs/Python GTK+3 Documentation.pdf',
-    './docs/Sugar Toolkit Documentation.pdf'
-]
+from transformers import pipeline
 
 # Revised Prompt Template to avoid mentioning the source
 PROMPT_TEMPLATE = """
@@ -33,15 +26,14 @@ Question: {question}
 Answer: Let's think step by step.
 """
 
-
 class RAG_Agent:
-    def __init__(self, model="llama3.1"):
-        self.model = OllamaLLM(model=model)
+    def __init__(self, model="bigscience/bloom-1b1"):
+        self.model = pipeline("text-generation", model=model, max_length = 200)
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
     def set_model(self, model):
-        self.model = OllamaLLM(model=model)
+        self.model = pipeline("text-generation", model=model)
 
     def get_model(self):
         return self.model
@@ -97,9 +89,7 @@ class RAG_Agent:
                 return top_result, score
         return None, 0.0
 
-
-
-    def run(self):
+    def run(self, question):
         # Format documents for context
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
@@ -112,25 +102,50 @@ class RAG_Agent:
                 "question": RunnablePassthrough()  
             }
             | self.prompt  
+            | (lambda x: str(x))  # Convert ChatPromptValue to string
             | self.model   
+            | (lambda outputs: outputs[0]['generated_text'])  # Extract generated text
             | StrOutputParser()  
         )
 
+        doc_result, relevance_score = self.get_relevant_document(question)
+        # Classifying query based on its relevance with retrieved context
+        if doc_result:
+            response = qa_chain.invoke({"query": question, "context": doc_result.page_content})
+        else:
+            response = qa_chain.invoke(question)
+        
+        return response
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Pippy's AI-Coding Assistant")
+    parser.add_argument('--model', type=str, choices=[
+        'bigscience/bloom-1b1',
+        'facebook/opt-350m',
+        'EleutherAI/gpt-neo-1.3B'
+    ], default='bigscience/bloom-1b1', help='Model name to use for text generation')
+    parser.add_argument('--docs', nargs='+', default=[
+        './docs/Pygame Documentation.pdf',
+        './docs/Python GTK+3 Documentation.pdf',
+        './docs/Sugar Toolkit Documentation.pdf'
+    ], help='List of document paths to load into the vector store')
+    args = parser.parse_args()
+
+    try:
+        agent = RAG_Agent(model=args.model)
+        agent.retriever = agent.setup_vectorstore(args.docs)
+
         while True:
-            question = input().strip()
-
-            doc_result, relevance_score = self.get_relevant_document(question)
-            # Classifying query based on it's relevance with retrieved context
-            if doc_result:
-                response = qa_chain.invoke({"query": question, "context": doc_result.page_content})
-            else:
-                response = qa_chain.invoke(question)
-            
-            return response
-
+            question = input("Enter your question: ").strip()
+            if not question:
+                print("Please enter a valid question.")
+                continue
+            response = agent.run(question)
+            print("Response:", response)
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    agent = RAG_Agent()
-    agent.retriever = agent.setup_vectorstore(document_paths)  
-    agent.run()
-
+    main()
