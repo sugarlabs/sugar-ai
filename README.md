@@ -6,10 +6,10 @@ By seamlessly integrating AI into Sugar activities, Sugar AI fosters creativity,
 ## Current AI Models🤖
 
 ### 1. Chatbot for the [Chat Activity](https://github.com/sugarlabs/chat)💬
-An interactive AI that helps kids learn through engaging conversations.
+The Chat Activity chatbot is an interactive gen-AI bot that helps kids learn through engaging conversations.
 
 ### 2. AI Coding Assistant for the [Pippy Activity](https://github.com/sugarlabs/Pippy)👩‍💻
-A Python coding assistant integrated with Pippy to support children in learning programming in more efficient way. Pippy's AI-assistant uses a Llama3.1 model from Ollama with a [RAG architecture](https://arxiv.org/pdf/2005.11401) for retrieving relevent examples from the [documentations](https://github.com/sugarlabs/sugar-ai/tree/main/docs). Specially enhanced to handle Python, GTK, and Pygame queries, making it an essential tool for beginner programmers.
+The Pippy Activity coding assistant is a gen-AI collaboration tool for children to learn and explore Python programming. Pippy's AI-assistant uses a Llama3.1 model from Ollama with a [RAG architecture](https://arxiv.org/pdf/2005.11401) for retrieving relevent examples from the [documentations](https://github.com/sugarlabs/sugar-ai/tree/main/docs). Specially enhanced to handle Python, GTK, and Pygame queries, making it an essential tool for beginner programmers.
 
 ## Project Structure🗂️
 ```
@@ -40,7 +40,7 @@ python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # venv\Scripts\activate  # Windows
 ```
-or you can also use conda refer this [documentation](https://docs.conda.io/projects/conda/en/stable/user-guide/getting-started.html) to setup conda locally on your system 
+Alternatively, you can use Conda. Refer to this [documentation](https://docs.conda.io/projects/conda/en/stable/user-guide/getting-started.html) to setup conda locally on your system.
 ```bash
 # Create and activate a Conda environment
 conda create --name <env-name> python=<python-version>
