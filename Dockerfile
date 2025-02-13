@@ -1,22 +1,17 @@
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04 AS builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3.9 python3-pip build-essential tzdata && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.10
 
 WORKDIR /app
-
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
-WORKDIR /app
+RUN apt-get update && apt-get install -y python3-pip libdbus-1-dev
 
-COPY --from=builder /usr/local/lib/python3.9/dist-packages/ /usr/local/lib/python3.9/dist-packages/
-COPY --from=builder /app /app
+RUN pip install cupy-cuda12x
 
-CMD ["python3", "rag_agent.py"]
+RUN pip install -r requirements.txt
+
+RUN pip install "fastapi[standard]"
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
