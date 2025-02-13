@@ -1,5 +1,5 @@
 # Pippy's AI-Coding Assistant
-# Uses a model from HuggingFace
+# Uses a model from HuggingFace with optional 4-bit quantization
 
 import os
 import argparse
@@ -24,18 +24,33 @@ Answer:
 """
 
 class RAG_Agent:
-    def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"):
-    # def __init__(self, model="Antonio27/llama3-8b-4-bit-for-sugar"):
-    # def __init__(self, model="meta-llama/Meta-Llama-3-8B"):
-    
-        self.model = pipeline(
-            "text-generation",
-            model=model,
-            max_length=300,
-            truncation=True,
-            torch_dtype=torch.float16,
-            device=0 if torch.cuda.is_available() else -1,
-        )
+    def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", quantize=True):
+        if quantize:
+            # Quantization enabled: using 4-bit quantization (requires bitsandbytes)
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained(model)
+            model_obj = AutoModelForCausalLM.from_pretrained(
+                model,
+                load_in_4bit=True,                   # Enable 4-bit quantization
+                torch_dtype=torch.float16,
+                device_map="auto"
+            )
+            self.model = pipeline(
+                "text-generation",
+                model=model_obj,
+                tokenizer=tokenizer,
+                max_length=300,
+                truncation=True,
+            )
+        else:
+            self.model = pipeline(
+                "text-generation",
+                model=model,
+                max_length=300,
+                truncation=True,
+                torch_dtype=torch.float16,
+                device=0 if torch.cuda.is_available() else -1,
+            )
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
@@ -108,10 +123,11 @@ def main():
         './docs/Python GTK+3 Documentation.pdf',
         './docs/Sugar Toolkit Documentation.pdf'
     ], help='List of document paths to load into the vector store')
+    parser.add_argument('--quantize', action='store_true', help='Enable 4-bit quantization')
     args = parser.parse_args()
 
     try:
-        agent = RAG_Agent(model=args.model)
+        agent = RAG_Agent(model=args.model, quantize=args.quantize)
         agent.retriever = agent.setup_vectorstore(args.docs)
         while True:
             question = input("Enter your question: ").strip()

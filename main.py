@@ -14,29 +14,29 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
+from fastapi import FastAPI
+import uvicorn
+from rag_agent import RAG_Agent
 
-# We should rename this
-class AI_Test:
-    def __init__(self):
-        pass
+app = FastAPI()
 
-    def generate_bot_response(self, question):
-        tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
-        model = GPT2LMHeadModel.from_pretrained("distilgpt2")
+# Initialize the RAG_Agent and its vector store (retriever).
+agent = RAG_Agent()
+agent.retriever = agent.setup_vectorstore([
+    './docs/Pygame Documentation.pdf',
+    './docs/Python GTK+3 Documentation.pdf',
+    './docs/Sugar Toolkit Documentation.pdf'
+])
 
-        prompt = '''
-        Your task is to answer children's questions using simple language.
-        Explain any difficult words in a way a 3-year-old can understand.
-        Keep responses under 60 words.
-        \n\nQuestion:
-        '''
+@app.get("/")
+def root():
+    return {"message": "Welcome to Sugar-AI with FastAPI!"}
 
-        input_text = prompt + question
+@app.post("/ask")
+def ask_question(question: str):
+    answer = agent.run(question)
+    return {"answer": answer}
 
-        inputs = tokenizer.encode(input_text, return_tensors='pt')
-        outputs = model.generate(inputs, max_length=150, num_return_sequences=1)
-        answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        return answer
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
