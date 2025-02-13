@@ -6,3 +6,6 @@ langchain_community
 langchain_huggingface
 langchain_core
 langchain
+fastapi
+uvicorn
+bitsandbytes
