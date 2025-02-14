@@ -25,13 +25,15 @@ Answer:
 
 class RAG_Agent:
     def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", quantize=True):
+    # def __init__(self, model="Antonio27/llama3-8b-4-bit-for-sugar", quantize=True):
+    # def __init__(self, model="meta-llama/Meta-Llama-3-8B", quantize=True):
+    
         if quantize:
-            # Quantization enabled: using 4-bit quantization (requires bitsandbytes)
             from transformers import AutoModelForCausalLM, AutoTokenizer
             tokenizer = AutoTokenizer.from_pretrained(model)
             model_obj = AutoModelForCausalLM.from_pretrained(
                 model,
-                load_in_4bit=True,                   # Enable 4-bit quantization
+                load_in_4bit=True,                   
                 torch_dtype=torch.float16,
                 device_map="auto"
             )
