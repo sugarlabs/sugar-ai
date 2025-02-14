@@ -25,18 +25,18 @@ Answer:
 
 class RAG_Agent:
     def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", quantize=True):
-    # def __init__(self, model="Antonio27/llama3-8b-4-bit-for-sugar", quantize=True):
-    # def __init__(self, model="meta-llama/Meta-Llama-3-8B", quantize=True):
-    
+        # Use 4-bit quantization if enabled
         if quantize:
             from transformers import AutoModelForCausalLM, AutoTokenizer
+
             tokenizer = AutoTokenizer.from_pretrained(model)
             model_obj = AutoModelForCausalLM.from_pretrained(
                 model,
-                load_in_4bit=True,                   
+                load_in_4bit=True,
                 torch_dtype=torch.float16,
                 device_map="auto"
             )
+
             self.model = pipeline(
                 "text-generation",
                 model=model_obj,
@@ -44,6 +44,7 @@ class RAG_Agent:
                 max_length=300,
                 truncation=True,
             )
+
         else:
             self.model = pipeline(
                 "text-generation",
@@ -53,6 +54,7 @@ class RAG_Agent:
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
             )
+    
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
