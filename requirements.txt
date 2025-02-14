@@ -1,5 +1,6 @@
 transformers>=4.45.2
 torch>=1.12.1
+accelerate>=0.26.0
 faiss-cpu
 PyMuPDF
 langchain_community

@@ -1,16 +1,17 @@
-FROM python:3.10
+FROM python:3.10-slim
 
 WORKDIR /app
 
 COPY . .
 
-RUN apt-get update && apt-get install -y python3-pip libdbus-1-dev
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3-pip libdbus-1-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip install cupy-cuda12x
+RUN pip install --no-cache-dir cupy-cuda12x
 
-RUN pip install -r requirements.txt
-
-RUN pip install "fastapi[standard]"
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir "fastapi[standard]"
 
 EXPOSE 8000
 
