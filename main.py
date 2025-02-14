@@ -13,15 +13,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
 from fastapi import FastAPI
 import uvicorn
 from rag_agent import RAG_Agent
 
 app = FastAPI()
 
-# Initialize the RAG_Agent and its vector store (retriever).
+# Initialize the RAG_Agent and its vector store (retriever) for the RAG endpoint.
 agent = RAG_Agent()
 agent.retriever = agent.setup_vectorstore([
     './docs/Pygame Documentation.pdf',
@@ -35,7 +33,19 @@ def root():
 
 @app.post("/ask")
 def ask_question(question: str):
+    """
+    Process a question using the full RAG pipeline (LLM + retrieval).
+    """
     answer = agent.run(question)
+    return {"answer": answer}
+
+@app.post("/ask-llm")
+def ask_llm(question: str):
+    """
+    Process a question by calling the LLM directly without retrieval.
+    """
+    response = agent.model(question)
+    answer = response[0]['generated_text'].split("Answer:")[-1].strip()
     return {"answer": answer}
 
 if __name__ == "__main__":
