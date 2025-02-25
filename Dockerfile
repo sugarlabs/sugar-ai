@@ -1,5 +1,5 @@
-FROM nvidia/cuda:12.1.0-devel-ubuntu22.04 
-# this base image is for CUDA 12.1.0 and Ubuntu 22.04, works fine
+# builder
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04 as builder
 
 WORKDIR /app
 
@@ -15,14 +15,11 @@ RUN apt-get update && \
         libdbus-1-dev && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir cupy-cuda12x
-# we can remvove this if we don't wanna use gpu
-
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir "fastapi[standard]"
 
 # runtime here
-FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
 WORKDIR /app
 
