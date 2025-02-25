@@ -1,9 +1,9 @@
-FROM nvidia/cuda:12.1.0-devel-ubuntu22.04 
-# this base image is for CUDA 12.1.0 and Ubuntu 22.04, works fine
+# builder
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04 as builder
 
 WORKDIR /app
 
-COPY . .
+COPY requirements.txt .
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -15,12 +15,29 @@ RUN apt-get update && \
         libdbus-1-dev && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir cupy-cuda12x
-# we can remvove this if we don't wanna use gpu
-
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir "fastapi[standard]"
 
+# runtime here
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-dev \  
+        python3-pip \
+        libdbus-1-dev \
+        build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+COPY main.py rag_agent.py ./
+COPY docs/ ./docs/
+
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
