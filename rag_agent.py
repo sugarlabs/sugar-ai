@@ -44,8 +44,7 @@ def combine_messages(x):
 
 def extract_answer_from_output(outputs):
     """
-    Extract the answer text from the model's output after the keyword
-    'Answer:'
+    Extract the answer text from the model's output after the keyword 'Answer:'.
     """
     generated_text = outputs[0]['generated_text']
     return generated_text.split("Answer:")[-1].strip()
@@ -54,14 +53,22 @@ def extract_answer_from_output(outputs):
 class RAG_Agent:
     def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
                  quantize=True):
-        # Use 4-bit quantization if enabled
-        if quantize:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
+        # Disable quantization if CUDA is not available
+        self.use_quant = quantize and torch.cuda.is_available()
+        if self.use_quant:
+            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
 
             tokenizer = AutoTokenizer.from_pretrained(model)
             model_obj = AutoModelForCausalLM.from_pretrained(
                 model,
-                load_in_4bit=True,
+                quantization_config=bnb_config,
                 torch_dtype=torch.float16,
                 device_map="auto"
             )
@@ -178,7 +185,7 @@ def main():
     parser.add_argument(
         '--quantize',
         action='store_true',
-        help='Enable 4-bit quantization'
+        help='Enable 4-bit quantization (only works with CUDA)'
     )
     args = parser.parse_args()
 
