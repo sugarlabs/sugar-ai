@@ -1,5 +1,5 @@
 # builder
-FROM nvidia/cuda:12.1.0-devel-ubuntu22.04 as builder
+FROM nvidia/cuda:12.8.0-devel-ubuntu22.04 AS builder
 
 WORKDIR /app
 
@@ -19,14 +19,14 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir "fastapi[standard]"
 
 # runtime here
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.10 \
-        python3.10-dev \  
+        python3.10-dev \
         python3-pip \
         libdbus-1-dev \
         build-essential && \

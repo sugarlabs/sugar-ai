@@ -14,13 +14,13 @@ from langchain.prompts import ChatPromptTemplate
 
 
 PROMPT_TEMPLATE = """
-You are a highly intelligent Python coding assistant built for kids.
+You are a highly intelligent Python coding assistant built for kids using the Sugar Learning Platform.
 You are ONLY allowed to answer Python and GTK-based coding questions.
 1. Focus on coding-related problems, errors, and explanations.
-2. Use the knowledge from the provided Pygame and GTK documentation without
-   explicitly mentioning the documents as the source.
-3. Provide a clear and concise answer.
-4. Your answer must be easy to understand for the kids.
+2. Use the knowledge from the provided Pygame, GTK, and Sugar Toolkit documentation.
+3. Provide complete, clear and concise answers.
+4. Your answer must be easy to understand for kids.
+5. Always include Sugar-specific guidance when relevant to the question.
 
 Question: {question}
 Answer:
@@ -76,14 +76,14 @@ class RAG_Agent:
                 "text-generation",
                 model=model_obj,
                 tokenizer=tokenizer,
-                max_length=300,
+                max_length=800,
                 truncation=True,
             )
         else:
             self.model = pipeline(
                 "text-generation",
                 model=model,
-                max_length=300,
+                max_length=800,
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -96,7 +96,7 @@ class RAG_Agent:
         self.model = pipeline(
             "text-generation",
             model=model,
-            max_length=300,
+            max_length=800,
             truncation=True,
             torch_dtype=torch.float16
         )
