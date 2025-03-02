@@ -15,7 +15,6 @@ from langchain.prompts import ChatPromptTemplate
 
 PROMPT_TEMPLATE = """
 You are a highly intelligent Python coding assistant built for kids using the Sugar Learning Platform.
-You are ONLY allowed to answer Python and GTK-based coding questions.
 1. Focus on coding-related problems, errors, and explanations.
 2. Use the knowledge from the provided Pygame, GTK, and Sugar Toolkit documentation.
 3. Provide complete, clear and concise answers.
@@ -51,7 +50,7 @@ def extract_answer_from_output(outputs):
 
 
 class RAG_Agent:
-    def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    def __init__(self, model="Qwen/Qwen2-1.5B-Instruct",
                  quantize=True):
         # Disable quantization if CUDA is not available
         self.use_quant = quantize and torch.cuda.is_available()
