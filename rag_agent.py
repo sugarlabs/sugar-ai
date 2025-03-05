@@ -25,6 +25,17 @@ Question: {question}
 Answer:
 """
 
+CHILD_FRIENDLY_PROMPT = """
+Your task is to answer children's questions using simple language.
+You will be given an answer, you will have to paraphrase it.
+Explain any difficult words in a way a 5-12-years-old can understand.
+
+Original answer: {original_answer}
+
+Child-friendly answer:
+"""
+
+
 
 def format_docs(docs):
     """Return all document content separated by two newlines."""
@@ -46,6 +57,10 @@ def extract_answer_from_output(outputs):
     Extract the answer text from the model's output after the keyword 'Answer:'.
     """
     generated_text = outputs[0]['generated_text']
+
+    if "Child-friendly answer:" in generated_text:
+        return generated_text.split("Child-friendly answer:")[-1].strip()
+    
     return generated_text.split("Answer:")[-1].strip()
 
 
@@ -54,6 +69,8 @@ class RAG_Agent:
                  quantize=True):
         # Disable quantization if CUDA is not available
         self.use_quant = quantize and torch.cuda.is_available()
+        self.model_name = model
+        
         if self.use_quant:
             from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
@@ -75,14 +92,32 @@ class RAG_Agent:
                 "text-generation",
                 model=model_obj,
                 tokenizer=tokenizer,
-                max_length=800,
+                max_length=1024,
+                truncation=True,
+            )
+            
+            tokenizer2 = AutoTokenizer.from_pretrained(model)
+            self.simplify_model = pipeline(
+                "text-generation",
+                model=model_obj,  
+                tokenizer=tokenizer2,
+                max_length=1024,   
                 truncation=True,
             )
         else:
             self.model = pipeline(
                 "text-generation",
                 model=model,
-                max_length=800,
+                max_length=1024,
+                truncation=True,
+                torch_dtype=torch.float16,
+                device=0 if torch.cuda.is_available() else -1,
+            )
+
+            self.simplify_model = pipeline(
+                "text-generation",
+                model=model,
+                max_length=1024,
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -90,12 +125,23 @@ class RAG_Agent:
 
         self.retriever = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+        self.child_prompt = ChatPromptTemplate.from_template(CHILD_FRIENDLY_PROMPT)
 
     def set_model(self, model):
+        # Update both models
+        self.model_name = model
         self.model = pipeline(
             "text-generation",
             model=model,
-            max_length=800,
+            max_length=1024,
+            truncation=True,
+            torch_dtype=torch.float16
+        )
+        
+        self.simplify_model = pipeline(
+            "text-generation",
+            model=model,
+            max_length=1024,
             truncation=True,
             torch_dtype=torch.float16
         )
@@ -132,6 +178,7 @@ class RAG_Agent:
     def run(self, question):
         """
         Build the QA chain and process the output from model generation.
+        Apply double prompting to make answers child-friendly.
         """
         # Build the chain components:
         chain_input = {
@@ -140,22 +187,32 @@ class RAG_Agent:
         }
         # The chain applies: prompt -> combine messages -> model ->
         # extract answer from output.
-        chain = (
+        first_chain = (
             chain_input
             | self.prompt
             | combine_messages
-            | self.model
+            | self.model  # Use the first model
             | extract_answer_from_output
         )
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
-            response = chain.invoke({
+            first_response = first_chain.invoke({
                 "query": question,
                 "context": doc_result.page_content
             })
         else:
-            response = chain.invoke(question)
-        return response
+            first_response = first_chain.invoke(question)
+
+        second_chain = (
+            {"original_answer": lambda x: x}
+            | self.child_prompt
+            | combine_messages
+            | self.simplify_model  
+            | extract_answer_from_output
+        )
+        
+        final_response = second_chain.invoke(first_response)
+        return final_response
 
 
 def main():
