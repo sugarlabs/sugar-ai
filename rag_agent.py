@@ -301,7 +301,6 @@ def main():
             'bigscience/bloom-1b1',
             'facebook/opt-350m',
             'EleutherAI/gpt-neo-1.3B',
-            'Qwen/Qwen2-1.5B-Instruct'
         ],
         default='bigscience/bloom-1b1',
         help='Model name to use for text generation'
