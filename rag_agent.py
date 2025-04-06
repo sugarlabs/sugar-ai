@@ -105,7 +105,7 @@ class RAG_Agent:
                 "text-generation",
                 model=model_obj,
                 tokenizer=tokenizer,
-                max_new_tokens=512, 
+                max_new_tokens=1024, 
                 return_full_text=False, 
                 do_sample=False, 
                 temperature=None, 
@@ -120,7 +120,7 @@ class RAG_Agent:
                 "text-generation",
                 model=model_obj,  
                 tokenizer=tokenizer2,
-                max_new_tokens=512, 
+                max_new_tokens=1024, 
                 return_full_text=False, 
                 do_sample=False, 
                 temperature=None, 
@@ -133,7 +133,7 @@ class RAG_Agent:
             self.model = pipeline(
                 "text-generation",
                 model=model,
-                max_new_tokens=512, 
+                max_new_tokens=1024, 
                 return_full_text=False, 
                 do_sample=False, 
                 temperature=None, 
@@ -148,7 +148,7 @@ class RAG_Agent:
             self.simplify_model = pipeline(
                 "text-generation",
                 model=model,
-                max_new_tokens=512, 
+                max_new_tokens=1024, 
                 return_full_text=False, 
                 do_sample=False, 
                 temperature=None, 
@@ -170,7 +170,7 @@ class RAG_Agent:
         self.model = pipeline(
             "text-generation",
             model=model,
-            max_new_tokens=512, 
+            max_new_tokens=1024, 
             return_full_text=False, 
             do_sample=False, 
             temperature=None, 
@@ -184,7 +184,7 @@ class RAG_Agent:
         self.simplify_model = pipeline(
             "text-generation",
             model=model,
-            max_new_tokens=512, 
+            max_new_tokens=1024, 
             return_full_text=False, 
             do_sample=False, 
             temperature=None, 
