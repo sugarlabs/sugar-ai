@@ -227,6 +227,8 @@ class RAG_Agent:
             
             results = self.retriever.invoke(query)
             
+            print(f"[DEBUG] Retrieved results: {results}")
+            
             if results and len(results) > 0:
                 return results[0], 1.0
             return None, 0.0
