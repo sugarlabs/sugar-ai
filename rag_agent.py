@@ -15,14 +15,12 @@ from langchain.prompts import ChatPromptTemplate
 
 
 PROMPT_TEMPLATE = """
-You are a smart and helpful assistant designed to answer coding questions using the Sugar Learning Platform.
+You are a smart and helpful assistant designed to answer coding questions using context given.
 
-Instructions:
-1. You must ONLY use the information from the provided context to answer the question.
-2. You must NOT use outside knowledge if the context provides an answer. If the context is empty or unrelated, use your general knowledge.
-3. Do NOT mention the context, documents, or how the answer was generated. Just provide the answer naturally and clearly.
-4. When possible, prioritize and include any relevant details from the context.
-5. Always answer in a clear, complete, and helpful way — don't skip important details, but avoid unnecessary repetition.
+1. The context above contains the relevant information needed to answer this specific question.
+2. Use the information from this context to formulate your answer.
+3. Prioritize and include any relevant details from the context.
+4. Always answer in clear, complete and helpful way.
 
 Context: {context}
 Question: {question}
@@ -31,16 +29,17 @@ Answer:
 """
 
 CHILD_FRIENDLY_PROMPT = """
-You are a helpful assistant who rewrites answers so children aged 3 to 10 can understand them.
+You are a helpful assistant who rewrites answers so that children aged 3 to 10 can understand them.
 
-Below is the original answer. Your job is to rewrite it using simple words and short sentences that a young child can understand.
-Here are some rules for you to follow:
-- ONLY rewrite the answer — do not add anything else
-- Do NOT mention the original answer or say that you're simplifying it
-- Do NOT explain what you're doing or Do not talk about how you changed the original answer.
-- Do NOT repeat ideas
-- Do NOT include extra tips or encouragement
-- Your response must ONLY be the simplified version of the original answer
+Your task:
+- ONLY rewrite the Original answer using simple words and short sentences.
+- Do NOT explain what the answer means.
+- Do NOT explain what you're doing.
+- Do NOT say anything extra.
+- Do NOT repeat ideas.
+- Do NOT add tips or encouragement.
+
+Just give the rewritten answer. Nothing else.
 
 Original answer:
 {original_answer}
@@ -110,7 +109,8 @@ class RAG_Agent:
                 "text-generation",
                 model=model_obj,
                 tokenizer=tokenizer,
-                max_new_tokens=1024, 
+                max_new_tokens=1024,
+                temperature=0.3, 
                 truncation=True
             )
             
@@ -119,7 +119,8 @@ class RAG_Agent:
                 "text-generation",
                 model=model_obj,  
                 tokenizer=tokenizer2,
-                max_new_tokens=1024, 
+                max_new_tokens=1024,
+                temperature=0.3,  
                 truncation=True
             )
         else:
@@ -127,6 +128,7 @@ class RAG_Agent:
                 "text-generation",
                 model=model,
                 max_new_tokens=1024, 
+                temperature=0.3, 
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -136,6 +138,7 @@ class RAG_Agent:
                 "text-generation",
                 model=model,
                 max_new_tokens=1024, 
+                temperature=0.3, 
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -152,6 +155,7 @@ class RAG_Agent:
             "text-generation",
             model=model,
             max_new_tokens=1024, 
+            temperature=0.3, 
             truncation=True,
             torch_dtype=torch.float16
         )
@@ -159,7 +163,8 @@ class RAG_Agent:
         self.simplify_model = pipeline(
             "text-generation",
             model=model,
-            max_new_tokens=1024,  
+            max_new_tokens=1024,
+            temperature=0.3,   
             truncation=True,
             torch_dtype=torch.float16
         )
@@ -199,7 +204,6 @@ class RAG_Agent:
         Apply double prompting to make answers child-friendly.
         """
         doc_result, _ = self.get_relevant_document(question)
-        
         context_text = format_docs(doc_result) if doc_result else ""
 
         if not context_text.strip():
@@ -213,7 +217,6 @@ class RAG_Agent:
             | extract_answer_from_output
         )
         first_response = first_chain.invoke(question)
-
         print(self.prompt.format(context=context_text, question=question))
         # The chain applies: prompt -> combine messages -> model ->
         # extract answer from output.
