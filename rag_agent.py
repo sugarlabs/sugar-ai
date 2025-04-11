@@ -238,7 +238,7 @@ def main():
         choices=[
             'bigscience/bloom-1b1',
             'facebook/opt-350m',
-            'EleutherAI/gpt-neo-1.3B',
+            'EleutherAI/gpt-neo-1.3B'
         ],
         default='bigscience/bloom-1b1',
         help='Model name to use for text generation'
