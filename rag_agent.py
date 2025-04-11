@@ -16,12 +16,13 @@ from langchain.prompts import ChatPromptTemplate
 
 PROMPT_TEMPLATE = """
 You are a smart and helpful assistant designed to answer coding questions using the Sugar Learning Platform.
+
 Instructions:
 1. You must ONLY use the information from the provided context to answer the question.
 2. You must NOT use outside knowledge if the context provides an answer. If the context is empty or unrelated, use your general knowledge.
 3. Do NOT mention the context, documents, or how the answer was generated. Just provide the answer naturally and clearly.
 4. When possible, prioritize and include any relevant details from the context.
-5. Always answer in a concise, accurate, and helpful manner.
+5. Always answer in a clear, complete, and helpful way — don't skip important details, but avoid unnecessary repetition.
 
 Context: {context}
 Question: {question}
@@ -29,15 +30,19 @@ Question: {question}
 Answer:
 """
 
-
 CHILD_FRIENDLY_PROMPT = """
-You are a friendly teacher talking to a child aged 3 to 10 years old.
+You are a helpful assistant who rewrites answers so children aged 3 to 10 can understand them.
 
-Rewrite the answer below using simple words and short sentences so a young child can understand it.
+Below is the original answer. Your job is to rewrite it using simple words and short sentences that a young child can understand.
+Here are some rules for you to follow:
+- ONLY rewrite the answer — do not add anything else
+- Do NOT mention the original answer or say that you're simplifying it
+- Do NOT explain what you're doing or Do not talk about how you changed the original answer.
+- Do NOT repeat ideas
+- Do NOT include extra tips or encouragement
+- Your response must ONLY be the simplified version of the original answer
 
-Include examples if needed. Stay close to the original meaning. Do not add extra commentary or explanation about what you are doing. 
-
-Here is the answer to simplify:
+Original answer:
 {original_answer}
 
 Child-friendly answer:
@@ -106,12 +111,6 @@ class RAG_Agent:
                 model=model_obj,
                 tokenizer=tokenizer,
                 max_new_tokens=1024, 
-                return_full_text=False, 
-                do_sample=False, 
-                temperature=None, 
-                top_p=None, 
-                top_k=None, 
-                repetition_penalty=1.2, 
                 truncation=True
             )
             
@@ -121,12 +120,6 @@ class RAG_Agent:
                 model=model_obj,  
                 tokenizer=tokenizer2,
                 max_new_tokens=1024, 
-                return_full_text=False, 
-                do_sample=False, 
-                temperature=None, 
-                top_p=None, 
-                top_k=None, 
-                repetition_penalty=1.2, 
                 truncation=True
             )
         else:
@@ -134,12 +127,6 @@ class RAG_Agent:
                 "text-generation",
                 model=model,
                 max_new_tokens=1024, 
-                return_full_text=False, 
-                do_sample=False, 
-                temperature=None, 
-                top_p=None, 
-                top_k=None, 
-                repetition_penalty=1.2, 
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -149,12 +136,6 @@ class RAG_Agent:
                 "text-generation",
                 model=model,
                 max_new_tokens=1024, 
-                return_full_text=False, 
-                do_sample=False, 
-                temperature=None, 
-                top_p=None, 
-                top_k=None, 
-                repetition_penalty=1.2, 
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -171,12 +152,6 @@ class RAG_Agent:
             "text-generation",
             model=model,
             max_new_tokens=1024, 
-            return_full_text=False, 
-            do_sample=False, 
-            temperature=None, 
-            top_p=None, 
-            top_k=None, 
-            repetition_penalty=1.2, 
             truncation=True,
             torch_dtype=torch.float16
         )
@@ -184,13 +159,7 @@ class RAG_Agent:
         self.simplify_model = pipeline(
             "text-generation",
             model=model,
-            max_new_tokens=1024, 
-            return_full_text=False, 
-            do_sample=False, 
-            temperature=None, 
-            top_p=None, 
-            top_k=None, 
-            repetition_penalty=1.2, 
+            max_new_tokens=1024,  
             truncation=True,
             torch_dtype=torch.float16
         )
