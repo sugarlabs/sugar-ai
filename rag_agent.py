@@ -204,6 +204,9 @@ class RAG_Agent:
         Apply double prompting to make answers child-friendly.
         """
         doc_result, _ = self.get_relevant_document(question)
+        
+        print(f"TOP RELEVANT DOCUMENT CONTENT: {doc_result}")
+
         context_text = format_docs(doc_result) if doc_result else ""
 
         if not context_text.strip():
@@ -217,6 +220,9 @@ class RAG_Agent:
             | extract_answer_from_output
         )
         first_response = first_chain.invoke(question)
+        
+        print(f"FIRST RESPONSE: {first_response}")
+
         print(self.prompt.format(context=context_text, question=question))
         # The chain applies: prompt -> combine messages -> model ->
         # extract answer from output.
@@ -228,8 +234,12 @@ class RAG_Agent:
             | self.simplify_model  
             | extract_answer_from_output
         )
+        print(f"CHILD PROMPT: {self.child_prompt.format(original_answer=first_response)}")
 
         final_response = second_chain.invoke(first_response)
+        
+        print(f"FINAL: {final_response}")
+
         return trim_incomplete_sentence(final_response)
 
 
