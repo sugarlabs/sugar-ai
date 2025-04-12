@@ -209,9 +209,6 @@ class RAG_Agent:
 
         context_text = format_docs(doc_result) if doc_result else ""
 
-        if not context_text.strip():
-            return "I couldn't find an answer in the documents."
-
         first_chain = (
             {"context": lambda x: context_text, "question": lambda x: x}
             | self.prompt
