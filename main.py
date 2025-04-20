@@ -13,40 +13,35 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from fastapi import FastAPI
+
+"""
+Main entry point for Sugar-AI application.
+"""
+
 import uvicorn
-from rag_agent import RAG_Agent
+import logging
+from sqlalchemy.orm import Session
+import os
 
-app = FastAPI()
+from app import create_app
+from app.database import get_db
+from app.auth import sync_env_keys_to_db
+from app.config import settings
 
-# Initialize the RAG_Agent and its vector store (retriever) for the RAG endpoint.
-agent = RAG_Agent()
-agent.retriever = agent.setup_vectorstore([
-    './docs/Pygame Documentation.pdf',
-    './docs/Python GTK+3 Documentation.pdf',
-    './docs/Sugar Toolkit Documentation.pdf'
-])
+# setup logging
+logger = logging.getLogger("sugar-ai")
 
-@app.get("/")
-def root():
-    return {"message": "Welcome to Sugar-AI with FastAPI!"}
+app = create_app()
 
-@app.post("/ask")
-def ask_question(question: str):
-    """
-    Process a question using the full RAG pipeline (LLM + retrieval).
-    """
-    answer = agent.run(question)
-    return {"answer": answer}
-
-@app.post("/ask-llm")
-def ask_llm(question: str):
-    """
-    Process a question by calling the LLM directly without retrieval.
-    """
-    response = agent.model(question)
-    answer = response[0]['generated_text'].split("Answer:")[-1].strip()
-    return {"answer": answer}
+@app.on_event("startup")
+async def startup_event():
+    """Initialize data on app startup"""
+    db = next(get_db())
+    sync_env_keys_to_db(db)
+    logger.info(f"Starting Sugar-AI with model: {settings.DEFAULT_MODEL}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    logger.info(f"Starting Sugar-AI on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
+

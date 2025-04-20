@@ -10,3 +10,10 @@ langchain
 fastapi
 uvicorn
 bitsandbytes
+sqlalchemy
+jinja2
+python-multipart
+authlib
+itsdangerous
+httpx
+pydantic-settings
