@@ -35,9 +35,14 @@ RUN apt-get update && \
 COPY --from=builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-COPY main.py rag_agent.py ./
+COPY *.py ./
+COPY templates/ ./templates/
+COPY static/ ./static/
 COPY docs/ ./docs/
-
+COPY app/ ./app/
+COPY .env* ./
+RUN mkdir -p /app/data
 EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
 
 CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
