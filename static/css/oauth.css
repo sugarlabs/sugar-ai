@@ -1,0 +1,84 @@
+/* oauth login styles */
+.login-container h1 {
+    margin-bottom: 1.5rem;
+}
+
+.login-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.oauth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 5px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    color: white;
+    transition: opacity 0.3s;
+}
+
+.oauth-btn:hover {
+    opacity: 0.9;
+}
+
+.github-btn {
+    background-color: #24292e;
+}
+
+.google-btn {
+    background-color: #DB4437;
+}
+
+.login-separator {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+}
+
+.login-separator::before,
+.login-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #ddd;
+}
+
+.login-separator span {
+    padding: 0 10px;
+    color: #777;
+}
+
+.api-login-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.3s;
+    width: auto;
+}
+
+.api-login-btn:hover {
+    background-color: #2980b9;
+}
+
+.return-link {
+    margin-top: 2rem;
+    display: block;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.return-link:hover {
+    text-decoration: underline;
+}
