@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Key Login - Sugar-AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h1>Sugar-AI Login</h1>
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+        
+        <form method="post">
+            <label for="api_key">Enter your API Key:</label>
+            <input type="password" id="api_key" name="api_key" required>
+            <button type="submit">Login</button>
+        </form>
+        
+        <div class="links">
+            <a href="/request-key">Request an API Key</a>
+            <a href="/oauth-login">Login with GitHub/Google</a>
+            <a href="/">Return to Homepage</a>
+        </div>
+    </div>
+</body>
+</html>
+

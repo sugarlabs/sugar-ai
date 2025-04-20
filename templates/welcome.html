@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to Sugar-AI{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/welcome.css') }}">
+{% endblock %}
+
+{% block header %}
+<header>
+  <div class="container header-container">
+    <div class="logo">
+      <h1>Sugar-AI</h1>
+      <p>An AI-powered coding assistant for the Sugar Learning Platform</p>
+    </div>
+    <div class="nav-buttons">
+      <a href="/oauth-login" class="nav-btn">Sign in with OAuth</a>
+      <a href="/admin-login" class="nav-btn">API Key Login</a>
+      <a href="/request-key" class="nav-btn primary">Request API Key</a>
+    </div>
+  </div>
+</header>
+
+
+<nav class="page-nav">
+  <div class="container">
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#use-cases">Use Cases</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#api">API Usage</a></li>
+      <li><a href="#docs">API Documentation</a></li>
+    </ul>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <section id="overview" class="hero">
+    <h2>Welcome to Sugar-AI</h2>
+    <p>
+      Sugar-AI is a specialized coding assistant designed to help children
+      learn programming with the Sugar Learning Platform. It uses advanced
+      AI to provide child-friendly explanations and code examples.
+    </p>
+    <div class="hero-buttons">
+      <a href="/request-key" class="btn btn-accent">Get Started</a>
+      <a href="https://github.com/sugarlabs/sugar-ai" class="btn">View on GitHub</a>
+    </div>
+  </section>
+
+  <h2 id="use-cases" class="section-title">How Sugar-AI Can Help You</h2>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-content">
+        <h3>For Students & Teachers</h3>
+        <p>
+          Sugar-AI helps students and teachers learn coding with Sugar Labs
+          tools:
+        </p>
+        <ul>
+          <li>Ask questions about Pygame, GTK+3, and Sugar Toolkit</li>
+          <li>Get explanations in child-friendly language</li>
+          <li>Learn programming concepts step by step</li>
+          <li>Receive examples tailored to Sugar activities</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a href="/request-key" class="btn">Request API Key</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-content">
+        <h3>For Developers</h3>
+        <p>
+          Integrate Sugar-AI with your applications using our simple API:
+        </p>
+        <ul>
+          <li>RESTful API endpoints for easy integration</li>
+          <li>Secure authentication with API keys</li>
+          <li>RAG (Retrieval-Augmented Generation) for accurate answers</li>
+          <li>Documented endpoints for developers</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a href="https://github.com/sugarlabs/sugar-ai" class="btn">View on GitHub</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-content">
+        <h3>For Administrators</h3>
+        <p>Manage Sugar-AI and monitor usage through the admin panel:</p>
+        <ul>
+          <li>Approve or deny API key requests</li>
+          <li>Monitor system quotas</li>
+          <li>Manage user permissions</li>
+          <li>Control access to advanced features</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a href="/admin-login" class="btn btn-accent">Admin Login</a>
+      </div>
+    </div>
+  </div>
+
+  <h2 id="dashboard" class="section-title">Your Sugar-AI Dashboard</h2>
+
+  <div class="card">
+    <h3>Dashboard Overview</h3>
+    <p>
+      The Sugar-AI Dashboard is your personal control center, accessible
+      after signing in with OAuth or an API key. Here's what you can do:
+    </p>
+
+    <div class="feature-grid" style="margin-top: 30px">
+      <div class="feature">
+        <h3>Interactive Chat</h3>
+        <p>
+          Ask questions directly to the AI and receive instant responses
+          about Sugar development
+        </p>
+      </div>
+      <div class="feature">
+        <h3>RAG Toggle</h3>
+        <p>
+          Switch between knowledge-enhanced responses and direct language
+          model responses
+        </p>
+      </div>
+      <div class="feature">
+        <h3>Usage Metrics</h3>
+        <p>Track your API usage, remaining quota.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top: 40px">Dashboard Benefits</h3>
+    <ul style="margin-top: 20px">
+      <li>
+        <strong>No Coding Required:</strong> Interact with Sugar-AI without
+        writing any code
+      </li>
+      <li>
+        <strong>Instant Feedback:</strong> Get immediate answers to your
+        programming questions
+      </li>
+      <li>
+        <strong>Educational Focus:</strong> Explanations geared toward
+        learning, not just solutions
+      </li>
+      <li>
+        <strong>Accessible Anywhere:</strong> Use from any device with a web
+        browser
+      </li>
+      <li>
+        <strong>Admin Features:</strong> Administrators can access
+        additional management tools
+      </li>
+    </ul>
+
+    <div style="text-align: center; margin-top: 30px">
+      <a href="/oauth-login" class="btn">Access Dashboard</a>
+    </div>
+  </div>
+
+  <h2 id="api" class="section-title">API Usage</h2>
+
+  <div class="card">
+    <h3>Using the Sugar-AI API</h3>
+    <p>
+      Integrate Sugar-AI's capabilities into your own applications with our
+      straightforward API:
+    </p>
+
+    <div class="code-example">
+      <h4>Python Example</h4>
+      <pre><code>import requests
+
+# Make a request to the Sugar-AI API
+api_key = "YOUR_API_KEY"
+url = "https://sugar-ai.sugarlabs.org/ask"
+params = {"question": "How do I create a Pygame window?"}
+headers = {"X-API-Key": api_key}
+
+response = requests.post(url, params=params, headers=headers)
+result = response.json()
+
+print(result["answer"])
+</code></pre>
+    </div>
+
+    <h4 style="margin-top: 30px">API Endpoints</h4>
+    <ul>
+      <li>
+        <strong>/ask</strong> - Get answers with Retrieval-Augmented
+        Generation
+      </li>
+      <li>
+        <strong>/ask-llm</strong> - Get direct responses from the language
+        model
+      </li>
+    </ul>
+
+    <div style="text-align: center; margin-top: 30px">
+      <a href="/request-key" class="btn btn-accent">Get Your API Key</a>
+    </div>
+  </div>
+  
+  <div class="documentation-section">
+    <h2 h2 id="docs" class="section-title">API Endpoints Documentation</h2>
+    
+    <div class="endpoint">
+      <h3>Ask Question (RAG Enhanced)</h3>
+      <div class="endpoint-method">POST</div>
+      <div class="endpoint-url">/ask?question={your_question}</div>
+      <p>Ask a coding question using Retrieval-Augmented Generation for enhanced context and precision.</p>
+      
+      <div class="endpoint-details">
+        <h4>Headers:</h4>
+        <pre>X-API-Key: your_api_key</pre>
+        
+        <h4>Example Request:</h4>
+        <pre>curl -X POST "http://localhost:8000/ask?question=How%20do%20I%20create%20a%20Python%20class?" \
+    -H "X-API-Key: your_api_key"</pre>
+        
+        <h4>Response Format:</h4>
+        <pre>{
+    "answer": "Detailed explanation about Python classes...",
+    "user": "Your Username",
+    "quota": {"remaining": 95, "total": 100}
+  }</pre>
+      </div>
+    </div>
+    
+    <div class="endpoint">
+      <h3>Direct LLM Question</h3>
+      <div class="endpoint-method">POST</div>
+      <div class="endpoint-url">/ask-llm?question={your_question}</div>
+      <p>Ask a question directly to the LLM without RAG enhancement.</p>
+      
+      <div class="endpoint-details">
+        <h4>Headers:</h4>
+        <pre>X-API-Key: your_api_key</pre>
+        
+        <h4>Example Request:</h4>
+        <pre>curl -X POST "http://localhost:8000/ask-llm?question=What%20is%20the%20difference%20between%20lists%20and%20tuples?" \
+    -H "X-API-Key: your_api_key"</pre>
+      </div>
+    </div>
+    
+   
+    
+    <div class="endpoint admin-only">
+      <h3>Change Model (Admin Only)</h3>
+      <div class="endpoint-method">POST</div>
+      <div class="endpoint-url">/change-model?model={model_name}&api_key={admin_key}&password={admin_password}</div>
+      <p>Change the LLM model being used for responses. Requires admin API key and password.</p>
+      
+      <div class="endpoint-details">
+        <h4>Example Request:</h4>
+        <pre>curl -X POST "http://localhost:8000/change-model?model=Qwen/Qwen2-1.5B-Instruct&api_key=admin_key&password=admin_password"</pre>
+        
+       
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script src="{{ url_for('static', path='js/welcome.js') }}"></script>
+{% endblock %}

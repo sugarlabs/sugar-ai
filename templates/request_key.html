@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Request API Key - Sugar-AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/css/forms.css">
+  </head>
+  <body>
+    <h1>Request Sugar-AI API Key</h1>
+
+    {% if message %}
+    <div class="message {% if success %}success{% else %}error{% endif %}">
+      {{ message }}
+    </div>
+    {% endif %}
+
+    <form method="post">
+      <div class="form-group">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required />
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required />
+      </div>
+
+      <div class="form-group">
+        <label for="reason">Why do you need access to Sugar-AI?</label>
+        <textarea id="reason" name="reason" rows="4" required></textarea>
+      </div>
+
+      <button type="submit">Submit Request</button>
+    </form>
+
+    <a href="/" class="return-link">Return to Homepage</a>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sugar-AI{% endblock %}</title>
+    
+    <!-- Common CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    
+    <!-- Page-specific CSS -->
+    {% block css %}{% endblock %}
+    
+    <!-- Additional head content -->
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Header Section -->
+    {% block header %}{% endblock %}
+    
+    <!-- Main Content -->
+    {% block content %}{% endblock %}
+    
+    <!-- Footer Section -->
+    {% block footer %}
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/sugarlabs/sugar-ai">GitHub</a>
+                <a href="https://www.sugarlabs.org/">Sugar Labs</a>
+                <a href="/request-key">Request API Key</a>
+                <a href="/admin-login">Admin Login</a>
+            </div>
+            <p>&copy; 2024 Sugar-AI. Licensed under GNU GPL v3.</p>
+        </div>
+    </footer>
+    {% endblock %}
+    
+    <!-- Common JavaScript -->
+    <script src="{{ url_for('static', path='js/common.js') }}"></script>
+    
+    <!-- Page-specific JavaScript -->
+    {% block js %}{% endblock %}
+</body>
+</html>
