@@ -1,2 +1,15 @@
-.env
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+# data
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.log.*
+.env
+.env.local
+.docker/
