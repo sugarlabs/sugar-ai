@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>API Key Admin - Sugar-AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/css/admin.css">
+  </head>
+  <body>
+    <h1>Sugar-AI API Key Administration</h1>
+
+    <div class="logout-container">
+      <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+
+    {% if message %}
+    <div class="message {% if success %}success{% else %}error{% endif %}">
+      {{ message }}
+    </div>
+    {% endif %}
+
+    <div class="tabs">
+      <button class="tablinks active" onclick="openTab(event, 'Pending')">
+        Pending Requests
+      </button>
+      <button class="tablinks" onclick="openTab(event, 'Approved')">
+        Approved Keys
+      </button>
+      <button class="tablinks" onclick="openTab(event, 'Denied')">
+        Denied Requests
+      </button>
+      
+    </div>
+
+    <div id="Pending" class="tab-content" style="display: block">
+      <h2>Pending Requests</h2>
+      <table>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Reason</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+        {% for key in pending_keys %}
+        <tr>
+          <td>{{ key.name }}</td>
+          <td>{{ key.email }}</td>
+          <td>{{ key.request_reason }}</td>
+          <td>{{ key.created_at }}</td>
+          <td>
+            <form method="post" action="/admin/approve/{{ key.id }}" style="display: inline">
+              <button type="submit" class="action-btn approve">Approve</button>
+            </form>
+            <form method="post" action="/admin/deny/{{ key.id }}" style="display: inline">
+              <button type="submit" class="action-btn deny">Deny</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div id="Approved" class="tab-content">
+      <h2>Approved API Keys</h2>
+      <table>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>API Key</th>
+          <th>Admin</th>
+          <th>Status</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+        {% for key in approved_keys %}
+        <tr>
+          <td>{{ key.name }}</td>
+          <td>{{ key.email }}</td>
+          <td>{{ key.key }}</td>
+          <td>{{ "Yes" if key.can_change_model else "No" }}</td>
+          <td>{{ "Active" if key.is_active else "Inactive" }}</td>
+          <td>{{ key.created_at }}</td>
+          <td>
+            <form method="post" action="/admin/toggle-admin/{{ key.id }}" style="display: block; margin-bottom: 8px">
+              <button type="submit" class="action-btn toggle-admin">Toggle Admin</button>
+            </form>
+            <form method="post" action="/admin/toggle-status/{{ key.id }}" style="display: block">
+              <button type="submit" class="action-btn toggle-status">
+                {{ "Deactivate" if key.is_active else "Activate" }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div id="Denied" class="tab-content">
+      <h2>Denied Requests</h2>
+      <table>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Reason</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+        {% for key in denied_keys %}
+        <tr>
+          <td>{{ key.name }}</td>
+          <td>{{ key.email }}</td>
+          <td>{{ key.request_reason }}</td>
+          <td>{{ key.created_at }}</td>
+          <td>
+            <form method="post" action="/admin/approve/{{ key.id }}" style="display: inline">
+              <button type="submit" class="action-btn approve">Approve</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <script src="/static/js/admin.js"></script>
+  </body>
+</html>

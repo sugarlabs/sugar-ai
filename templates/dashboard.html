@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - Sugar-AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <header>
+        <div class="container" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <h1 class="header-title">Sugar-AI Dashboard</h1>
+            <div class="user-info">
+                <span>Welcome, {{ user.name if user.name else user.email }}</span>
+                <img src="{{ user.picture if user.picture else 'https://ui-avatars.com/api/?name=' + user.name|urlencode }}" alt="Avatar" class="user-avatar">
+                {% if admin_url %}
+                <a href="{{ admin_url }}" class="btn" style="margin-left: 10px; background-color: var(--accent-color);">Admin Panel</a>
+                {% endif %}
+                <a href="/logout" class="btn btn-danger" style="margin-left: 10px;">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="dashboard-grid">
+            <aside class="sidebar">
+                <nav>
+                    <ul class="nav-menu">
+                        <li><a href="#" class="active">Chat with AI</a></li>
+                    </ul>
+                </nav>
+                
+                <div class="api-key-info">
+                    <h3>API Usage</h3>
+                    <p>Daily quota: <span id="quota-remaining">95</span>/<span id="quota-total">100</span></p>
+                    <div class="quota-bar-container">
+                        <div class="quota-bar" style="width: 95%;"></div>
+                    </div>
+                    <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
+                        <h4 style="margin-top: 0;">Your API Key</h4>
+                        <div style="position: relative;">
+                            <input type="password" value="{{ api_key }}" id="api-key-field" readonly 
+                                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; margin-bottom: 10px;">
+                            <div style="display: flex; gap: 10px;">
+                                <button id="toggle-api-key" class="btn" style="flex: 1;">
+                                    Show Key
+                                </button>
+                                <button id="copy-api-key" class="btn" style="flex: 1;">
+                                    Copy Key
+                                </button>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.8em; color: #777; margin-top: 8px;">
+                            Use this key to authenticate API requests in your applications.
+                        </p>
+                    </div>
+                </div>
+            </aside>
+            
+            <main class="main-content">
+                <h2>Chat with Sugar-AI</h2>
+                <p>Ask questions about Pygame, GTK+3, or Sugar Toolkit programming:</p>
+                
+                <div class="chat-interface">
+                    <div class="chat-messages" id="chat-messages">
+                        <div style="text-align: center; color: #777;">
+                            <p>Start a conversation with Sugar-AI!</p>
+                            <p>Try asking: "How do I create a Sugar activity?"</p>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="chat-input" placeholder="Type your question...">
+                        <button class="chat-submit" id="chat-submit">Send</button>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <label>
+                        <input type="checkbox" id="use-rag" checked> 
+                        Use RAG (Retrieval-Augmented Generation)
+                    </label>
+                    <p style="color: #777; font-size: 0.9em;">
+                        RAG enhances responses with information from Sugar documentation.
+                    </p>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
