@@ -57,7 +57,7 @@ def extract_answer_from_output(outputs):
 class RAGAgent:
     """Retrieval-Augmented Generation agent for Sugar-AI"""
     
-    def __init__(self, model: str = "Qwen/Qwen2-1.5B-Instruct", quantize: bool = True):
+    def __init__(self, model: str = "google/gemma-3-27b-it", quantize: bool = True):
         # disable quantization if CUDA is not available
         self.use_quant = quantize and torch.cuda.is_available()
         self.model_name = model
