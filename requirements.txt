@@ -17,3 +17,4 @@ authlib
 itsdangerous
 httpx
 pydantic-settings
+sentence-transformers
