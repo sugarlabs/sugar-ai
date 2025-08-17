@@ -125,6 +125,39 @@ async def ask_llm(
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
+@router.post("/debug")
+async def debug(
+    code: str, 
+    context: bool,
+    user_info: dict = Depends(verify_api_key), 
+    request: Request = None
+):
+    """Process python code for debugging"""
+    start_time = time.time()
+    
+    client_ip = request.client.host if request else "unknown"
+    logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
+    
+    try:
+        response = agent.debug(code, context)
+        answer = response
+
+        process_time = time.time() - start_time
+        logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
+        
+        # check quota
+        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
+        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
+        
+        return {
+            "answer": answer, 
+            "user": user_info["name"],
+            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+        }
+    except Exception as e:
+        logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
 @router.post("/change-model")
 async def change_model(
     model: str, 
