@@ -190,3 +190,47 @@ class RAGAgent:
         
         final_response = second_chain.invoke(first_response)
         return final_response
+
+    def run_with_custom_prompt(self, question: str, custom_prompt: str, 
+                             max_length: int = 1024, truncation: bool = True,
+                             repetition_penalty: float = 1.1, temperature: float = 0.7,
+                             top_p: float = 0.9, top_k: int = 50) -> str:
+        """Process a question with custom prompt and generation parameters (no RAG)"""
+        
+        # Combine custom prompt with question
+        full_prompt = f"{custom_prompt}\n\nQuestion: {question}\nAnswer:"
+        
+        # Generate response with custom parameters
+        try:
+            response = self.model(
+                full_prompt,
+                max_length=max_length,
+                truncation=truncation,
+                repetition_penalty=repetition_penalty,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                do_sample=True if temperature > 0 else False,
+                pad_token_id=self.model.tokenizer.eos_token_id,
+            )
+            
+            # Extract the answer from the generated text
+            generated_text = response[0]['generated_text']
+            
+            # Remove the original prompt from the response
+            if "Answer:" in generated_text:
+                answer = generated_text.split("Answer:")[-1].strip()
+            else:
+                # Fallback: remove the input prompt
+                answer = generated_text.replace(full_prompt, "").strip()
+            
+            # Stop at double newlines - this is our main stopping condition, else model continues with generating next user input, which we don't want
+            if "\n\n" in answer:
+                # Find the first occurrence of double newlines and cut there
+                double_newline_pos = answer.find("\n\n")
+                answer = answer[:double_newline_pos].strip()
+            
+            return answer
+            
+        except Exception as e:
+            raise Exception(f"Error generating response with custom prompt: {str(e)}")
