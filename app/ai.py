@@ -10,29 +10,7 @@ from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.runnables import RunnablePassthrough
 from langchain.prompts import ChatPromptTemplate
 from typing import Optional, List
-
-PROMPT_TEMPLATE = """
-You are a highly intelligent Python coding assistant built for kids using the Sugar Learning Platform.
-1. Focus on coding-related problems, errors, and explanations.
-2. Use the knowledge from the provided Pygame, GTK, and Sugar Toolkit documentation.
-3. Provide complete, clear and concise answers.
-4. Your answer must be easy to understand for kids.
-5. Always include Sugar-specific guidance when relevant to the question.
-6. Always answer in English only.
-
-Question: {question}
-Answer:
-"""
-
-CHILD_FRIENDLY_PROMPT = """
-Your task is to answer children's questions using simple language.
-You will be given an answer, you will have to paraphrase it.
-Explain any difficult words in a way a 5-12-years-old can understand.
-
-Original answer: {original_answer}
-
-Child-friendly answer:
-"""
+from app.prompts import PROMPT_TEMPLATE, CHILD_FRIENDLY_PROMPT, CODE_DEBUG_PROMPT, CODE_CONTEXT_PROMPT, KIDS_CONTEXT_PROMPT, KIDS_DEBUG_PROMPT
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -83,7 +61,7 @@ class RAGAgent:
                 "text-generation",
                 model=model_obj,
                 tokenizer=tokenizer,
-                max_length=1024,
+                max_new_tokens=1024,
                 truncation=True,
             )
             
@@ -91,14 +69,14 @@ class RAGAgent:
                 "text-generation",
                 model=model_obj,
                 tokenizer=tokenizer,
-                max_length=1024,
+                max_new_tokens=1024,
                 truncation=True,
             )
         else:
             self.model = pipeline(
                 "text-generation",
                 model=model,
-                max_length=1024,
+                max_new_tokens=1024,
                 truncation=True,
                 torch_dtype=torch.float16,
                 device=0 if torch.cuda.is_available() else -1,
@@ -109,6 +87,10 @@ class RAGAgent:
         self.retriever: Optional[FAISS] = None
         self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
         self.child_prompt = ChatPromptTemplate.from_template(CHILD_FRIENDLY_PROMPT)
+        self.debug_prompt = ChatPromptTemplate.from_template(CODE_DEBUG_PROMPT)
+        self.context_prompt = ChatPromptTemplate.from_template(CODE_CONTEXT_PROMPT)
+        self.kids_debug_prompt = ChatPromptTemplate.from_template(KIDS_DEBUG_PROMPT)
+        self.kids_context_prompt = ChatPromptTemplate.from_template(KIDS_CONTEXT_PROMPT)
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
@@ -152,6 +134,46 @@ class RAGAgent:
             if score >= threshold:
                 return top_result, score
         return None, 0.0
+    
+    def debug(self, code: str, context: bool) -> str:
+        """
+        Debugging chain (dual-chain):
+        Chain 1 - Debugging suggestion: code → debug prompt → combine → model → extract answer
+        Chain 2 - Kid friendly formatting: answer → kids_debug prompt → combine → model → extract answer
+        """
+        debug_chain = (
+            self.debug_prompt
+            | combine_messages
+            | self.model
+            | extract_answer_from_output
+            | self.kids_debug_prompt
+            | combine_messages
+            | self.model
+            | extract_answer_from_output
+        )
+        
+        """
+        Contextualization chain (dual-chain):
+        Chain 1 - Context generation: code → context prompt → combine → model → extract answer
+        Chain 2 - Kid friendly formatting: answer → kids_context prompt → combine → model → extract answer
+        """
+        context_chain = (
+            self.context_prompt
+            | combine_messages
+            | self.model
+            | extract_answer_from_output
+            | self.kids_context_prompt
+            | combine_messages
+            | self.model
+            | extract_answer_from_output
+        )
+
+        if context:
+            context_response = context_chain.invoke({"code": code})
+            return context_response
+    
+        debug_response = debug_chain.invoke({"code": code})
+        return debug_response
 
     def run(self, question: str) -> str:
         """Process a question through the RAG pipeline"""
