@@ -65,6 +65,7 @@
           <li>Get explanations in child-friendly language</li>
           <li>Learn programming concepts step by step</li>
           <li>Receive examples tailored to Sugar activities</li>
+          <li>Get kid-friendly debugging suggestions for your python programs</li>
         </ul>
       </div>
       <div class="card-footer">
@@ -202,6 +203,9 @@ print(result["answer"])
         <strong>/ask-llm</strong> - Get direct responses from the language
         model
       </li>
+      <li>
+        <strong>/debug</strong> - Get kid-friendly debugging suggestions for Python code
+      </li>
     </ul>
 
     <div style="text-align: center; margin-top: 30px">
@@ -229,6 +233,33 @@ print(result["answer"])
         <h4>Response Format:</h4>
         <pre>{
     "answer": "Detailed explanation about Python classes...",
+    "user": "Your Username",
+    "quota": {"remaining": 95, "total": 100}
+  }</pre>
+      </div>
+    </div>
+    
+    <div class="endpoint">
+      <h3>Debug Python Code</h3>
+      <div class="endpoint-method">POST</div>
+      <div class="endpoint-url">/debug?code={your_python_code}&context={true|false}</div>
+      <p>Send your python code to get debugging suggestions, with context mode for kid-friendly code explanations.</p>
+      
+      <div class="endpoint-details">
+        <h4>Headers:</h4>
+        <pre>X-API-Key: your_api_key</pre>
+
+        <h4>Params:</h4>
+        <pre>code: your_python_code,
+context: true | false  # turn on context mode (explains code in a kid-friendly way)</pre>
+
+        <h4>Example Request:</h4>
+        <pre>curl -X POST "http://localhost:8000/debug?code=How%20do%20I%20create%20a%20Python%20class&context=False?" \
+    -H "X-API-Key: your_api_key"</pre>
+        
+        <h4>Response Format:</h4>
+        <pre>{
+    "answer": "Debugging suggestions for your python code....",
     "user": "Your Username",
     "quota": {"remaining": 95, "total": 100}
   }</pre>
