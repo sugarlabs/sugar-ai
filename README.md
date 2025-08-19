@@ -63,6 +63,16 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
     The API returns a JSON object with the answer.
 
+- **POST endpoint for debugging python programs**
+
+    To submit your code, send a POST request to `/debug` with the `code` parameter and a `context` flag. For example:
+
+    ```sh
+    curl -X POST "http://localhost:8000/debug?code=How%20do%20I%20create%20a%20Pygame%20window&context=False?"
+    ```
+
+    The API returns a JSON object with the answer.
+
 - **Additional POST endpoint (/ask-llm)**
 
     An alternative endpoint `/ask-llm` is available in `main.py`, which provides similar functionality with an enhanced processing pipeline for LLM interactions. To use it, send your coding-related question using:
