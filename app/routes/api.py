@@ -3,6 +3,7 @@ API routes for Sugar-AI.
 """
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 import time
 import logging
 import os
@@ -13,6 +14,17 @@ from typing import Dict, Optional
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.config import settings
+
+class PromptedLLMRequest(BaseModel):
+    """Request model for ask-llm-prompted endpoint"""
+    question: str = Field(..., description="The question to ask")
+    custom_prompt: str = Field(..., description="Custom prompt to replace system prompt")
+    max_length: int = Field(1024, description="Maximum length of generated text")
+    truncation: bool = Field(True, description="Whether to truncate input if too long")
+    repetition_penalty: float = Field(1.1, description="Repetition penalty")
+    temperature: float = Field(0.7, description="Temperature for sampling")
+    top_p: float = Field(0.9, description="Top-p (nucleus) sampling parameter")
+    top_k: int = Field(50, description="Top-k sampling parameter")
 
 router = APIRouter(tags=["api"])
 
@@ -120,6 +132,57 @@ async def ask_llm(
             "answer": answer, 
             "user": user_info["name"],
             "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+        }
+    except Exception as e:
+        logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+@router.post("/ask-llm-prompted")
+async def ask_llm_prompted(
+    request_data: PromptedLLMRequest,
+    user_info: dict = Depends(verify_api_key), 
+    request: Request = None
+):
+    """This endpoint lets you ask a question to the model running on Sugar-AI using custom prompts and also provides options to change model parameters to tune the output.
+    RAG is disabled for this endpoint.
+    """
+    start_time = time.time()
+    
+    client_ip = request.client.host if request else "unknown"
+    logger.info(f"REQUEST - /ask-llm-prompted - User: {user_info['name']} - IP: {client_ip} - Question: {request_data.question[:200]}...")
+    logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
+    
+    try:
+        answer = agent.run_with_custom_prompt(
+            question=request_data.question,
+            custom_prompt=request_data.custom_prompt,
+            max_length=request_data.max_length,
+            truncation=request_data.truncation,
+            repetition_penalty=request_data.repetition_penalty,
+            temperature=request_data.temperature,
+            top_p=request_data.top_p,
+            top_k=request_data.top_k
+        )
+        
+        process_time = time.time() - start_time
+        logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
+        
+        # check quota
+        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
+        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
+        
+        return {
+            "answer": answer, 
+            "user": user_info["name"],
+            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
+            "generation_params": {
+                "max_length": request_data.max_length,
+                "truncation": request_data.truncation,
+                "repetition_penalty": request_data.repetition_penalty,
+                "temperature": request_data.temperature,
+                "top_p": request_data.top_p,
+                "top_k": request_data.top_k
+            }
         }
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
