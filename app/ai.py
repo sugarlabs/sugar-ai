@@ -10,7 +10,7 @@ from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.runnables import RunnablePassthrough
 from langchain.prompts import ChatPromptTemplate
 from typing import Optional, List
-from app.prompts import PROMPT_TEMPLATE, CHILD_FRIENDLY_PROMPT, CODE_DEBUG_PROMPT, CODE_CONTEXT_PROMPT, KIDS_CONTEXT_PROMPT, KIDS_DEBUG_PROMPT
+import app.prompts as prompts
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -85,12 +85,12 @@ class RAGAgent:
             self.simplify_model = self.model
 
         self.retriever: Optional[FAISS] = None
-        self.prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
-        self.child_prompt = ChatPromptTemplate.from_template(CHILD_FRIENDLY_PROMPT)
-        self.debug_prompt = ChatPromptTemplate.from_template(CODE_DEBUG_PROMPT)
-        self.context_prompt = ChatPromptTemplate.from_template(CODE_CONTEXT_PROMPT)
-        self.kids_debug_prompt = ChatPromptTemplate.from_template(KIDS_DEBUG_PROMPT)
-        self.kids_context_prompt = ChatPromptTemplate.from_template(KIDS_CONTEXT_PROMPT)
+        self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
+        self.child_prompt = ChatPromptTemplate.from_template(prompts.CHILD_FRIENDLY_PROMPT)
+        self.debug_prompt = ChatPromptTemplate.from_template(prompts.CODE_DEBUG_PROMPT)
+        self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
+        self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
+        self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
