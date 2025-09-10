@@ -9,7 +9,7 @@ import logging
 import os
 import json
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
@@ -19,6 +19,21 @@ class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
     question: str = Field(..., description="The question to ask")
     custom_prompt: str = Field(..., description="Custom prompt to replace system prompt")
+    max_length: int = Field(1024, description="Maximum length of generated text")
+    truncation: bool = Field(True, description="Whether to truncate input if too long")
+    repetition_penalty: float = Field(1.1, description="Repetition penalty")
+    temperature: float = Field(0.7, description="Temperature for sampling")
+    top_p: float = Field(0.9, description="Top-p (nucleus) sampling parameter")
+    top_k: int = Field(50, description="Top-k sampling parameter")
+
+# Pydantic models for chat completions
+class ChatMessage(BaseModel):
+    role: str  # "system", "user", "assistant" 
+    content: str
+
+class ChatCompletionRequest(BaseModel):
+    """Request model for chat completions endpoint"""
+    messages: List[ChatMessage] = Field(..., description="List of chat messages")
     max_length: int = Field(1024, description="Maximum length of generated text")
     truncation: bool = Field(True, description="Whether to truncate input if too long")
     repetition_penalty: float = Field(1.1, description="Repetition penalty")
@@ -221,6 +236,77 @@ async def debug(
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+    
+@router.post("/chat/completions")
+async def chat_completions(
+    request_data: ChatCompletionRequest,
+    user_info: dict = Depends(verify_api_key),
+    request: Request = None
+):
+    """Chat completions endpoint with custom generation parameters.
+    Supports system, user, and assistant roles with json format.
+    """
+    start_time = time.time()
+    
+    client_ip = request.client.host if request else "unknown"
+    
+    # Log the last user message for tracking
+    user_messages = [msg for msg in request_data.messages if msg.role == "user"]
+    last_user_msg = user_messages[-1].content if user_messages else "No user message"
+    logger.info(f"REQUEST - /chat/completions - User: {user_info['name']} - IP: {client_ip} - Last message: {last_user_msg[:200]}...")
+    
+    # Log system message if present
+    system_messages = [msg for msg in request_data.messages if msg.role == "system"]
+    if system_messages:
+        logger.info(f"SYSTEM PROMPT - User: {user_info['name']} - Prompt: {system_messages[0].content[:100]}...")
+    
+    try:
+        # Convert Pydantic messages to dict format for the agent function
+        messages_dict = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
+        
+        # Call the agent's chat completion function
+        answer = agent.run_chat_completion(
+            messages=messages_dict,
+            max_length=request_data.max_length,
+            truncation=request_data.truncation,
+            repetition_penalty=request_data.repetition_penalty,
+            temperature=request_data.temperature,
+            top_p=request_data.top_p,
+            top_k=request_data.top_k
+        )
+        
+        process_time = time.time() - start_time
+        logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
+        
+        # Check quota
+        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
+        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
+        
+        # Return response format
+        return {
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": answer
+                },
+                "index": 0,
+                "finish_reason": "stop"
+            }],
+            "user": user_info["name"],
+            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
+            "generation_params": {
+                "max_length": request_data.max_length,
+                "truncation": request_data.truncation,
+                "repetition_penalty": request_data.repetition_penalty,
+                "temperature": request_data.temperature,
+                "top_p": request_data.top_p,
+                "top_k": request_data.top_k
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing chat completion: {str(e)}")
 
 @router.post("/change-model")
 async def change_model(

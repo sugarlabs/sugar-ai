@@ -256,3 +256,102 @@ class RAGAgent:
             
         except Exception as e:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
+
+    def _normalize_chat_messages(self, messages: list) -> list:
+        """
+        Normalize messages to roles expected by Gemma chat template.
+        - Convert 'assistant' -> 'model'
+        - Merge first 'system' into first 'user' content
+        """
+        system_content = ""
+        for msg in messages:
+            if msg.get("role") == "system" and msg.get("content"):
+                system_content = msg["content"]
+                break
+
+        normalized = []
+        first_user_seen = False
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content", "")
+
+            if role == "system":
+                continue
+
+            if role == "assistant":
+                role = "model"
+
+            if role == "user" and not first_user_seen and system_content:
+                content = f"{system_content}\n\n{content}"
+                first_user_seen = True
+
+            normalized.append({"role": role, "content": content})
+        return normalized
+
+
+    def _extract_after_prompt(self, full_text: str, prompt: str, eos_token: str = None) -> str:
+        """Return the model completion that comes after the prompt.
+        Keeps logic minimal; optionally trims at eos token or first blank paragraph.
+        """
+        # Remove prompt prefix if present
+        if full_text.startswith(prompt):
+            answer = full_text[len(prompt):].strip()
+        else:
+            answer = full_text.strip()
+
+        # Trim on EOS token if available
+        if eos_token and eos_token in answer:
+            answer = answer.split(eos_token)[0].strip()
+
+        # Conservative stop at first double newline if very long
+        if "\n\n" in answer:
+            candidate = answer.split("\n\n", 1)[0].strip()
+            if len(candidate) > 10:
+                answer = candidate
+        return answer
+
+
+    def run_chat_completion(self, messages: list, 
+                        max_length: int = 1024, truncation: bool = True,
+                        repetition_penalty: float = 1.1, temperature: float = 0.7,
+                        top_p: float = 0.9, top_k: int = 50) -> str:
+        """
+        Process chat messages with chat template format and generation parameters.
+        """
+
+        # Normalize messages and build prompt using tokenizer's chat template
+        chat = self._normalize_chat_messages(messages)
+        full_prompt = self.model.tokenizer.apply_chat_template(
+            chat,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+        # Generate response with custom parameters
+        try:
+            response = self.model(
+                full_prompt,
+                max_length=max_length,
+                truncation=truncation,
+                repetition_penalty=repetition_penalty,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                do_sample=True if temperature > 0 else False,
+                pad_token_id=self.model.tokenizer.eos_token_id,
+            )
+            
+            # Extract the answer from the generated text
+            generated_text = response[0]['generated_text']
+            
+            # Extract only the new model response
+            answer = self._extract_after_prompt(
+                generated_text,
+                full_prompt,
+                getattr(self.model.tokenizer, "eos_token", None),
+            )
+            
+            return answer
+            
+        except Exception as e:
+            raise Exception(f"Error generating chat completion: {str(e)}")
