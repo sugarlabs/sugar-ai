@@ -66,6 +66,7 @@
           <li>Learn programming concepts step by step</li>
           <li>Receive examples tailored to Sugar activities</li>
           <li>Get kid-friendly debugging suggestions for your python programs</li>
+          <li>Utilize the chat completion functionality to generate conversational model responses</li>
         </ul>
       </div>
       <div class="card-footer">
@@ -264,6 +265,9 @@ print(result["answer"])
       <li>
         <strong>/debug</strong> - Get kid-friendly debugging suggestions for Python code
       </li>
+      <li>
+        <strong>/chat/completions</strong> - Utilize the chat completion functionality to generate conversational model responses
+      </li>
     </ul>
 
     <div style="text-align: center; margin-top: 30px">
@@ -321,6 +325,80 @@ context: true | false  # turn on context mode (explains code in a kid-friendly w
     "user": "Your Username",
     "quota": {"remaining": 95, "total": 100}
   }</pre>
+      </div>
+    </div>
+
+    <div class="endpoint">
+      <h3>Chat Completions</h3>
+      <div class="endpoint-method">POST</div>
+      <div class="endpoint-url">/chat/completions</div>
+      <p>Send your chat history(along with system prompt) to get responses from the language model for conversational responses.</p>
+      
+      <div class="endpoint-details">
+        <h4>Headers:</h4>
+        <pre>Content-Type: application/json</pre>
+        <pre>X-API-Key: your_api_key</pre>
+
+        <h4>Params:</h4>
+        <pre>messages:
+  [
+    {role: "system", content:(system_prompt)},
+    {role: "user", content:(user_message)},
+    {role: "assistant", content:(assistant_message)},
+    {role: "user", content:(user_message)},......
+  ],
+max_length: maximum tokens in the output,
+truncation: whether to cut off text exceeding limits,
+repetition_penalty: penalizes repeated phrases,
+temperature: controls randomness/creativity,
+top_p: nucleus sampling for diversity (probability cutoff),
+top_k: restricts word choices to the top k candidates</pre>
+
+        <h4>Example Request:</h4>
+        <pre>curl -X POST "http://localhost:8000/chat/completions" \
+-H "Content-Type: application/json" \
+-H "X-API-KEY: sugarai2024" \
+-d '{
+    "messages": [
+    {"role": "system", "content": "You are a helpful AI assistant.Reply in 2-3 sentences."},
+    {"role": "user", "content": "What is machine learning?"},
+    {"role": "assistant", "content": "Machine learning is a subset of artificial intelligence..."},
+    {"role": "user", "content": "Can you give me a simple example?"}
+],
+    "max_length": 512, #optional
+    "truncation": false, #optional
+    "repetition_penalty": 1.1, #optional
+    "temperature": 0.7, #optional
+    "top_p": 0.9, #optional
+    "top_k": 40 #optional
+}'</pre>
+        
+        <h4>Response Format:</h4>
+        <pre>{
+    "choices": [
+        {
+        "message": {
+            "role": "assistant",
+            "content": "Sure! Machine learning involves algorithms....."
+        },
+        "index": 0,
+        "finish_reason": "stop"
+        }
+    ],
+    "user": "Admin Key",
+    "quota": {
+        "remaining": 99,
+        "total": 100
+    },
+    "generation_params": {
+        "max_length": 512,
+        "truncation": false,
+        "repetition_penalty": 1.1,
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40
+    }
+}</pre>
       </div>
     </div>
     
