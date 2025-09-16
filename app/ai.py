@@ -261,31 +261,45 @@ class RAGAgent:
         """
         Normalize messages to roles expected by Gemma chat template.
         - Convert 'assistant' -> 'model'
-        - Merge first 'system' into first 'user' content
+        - Handle system message placement based on first non-system message:
+        * If first message is 'user': merge system into first user message
+        * If first message is 'assistant': create user message with system content, then assistant message
         """
+        # Extract system content
         system_content = ""
         for msg in messages:
             if msg.get("role") == "system" and msg.get("content"):
                 system_content = msg["content"]
                 break
-
+        
+        # Filter out system messages and find first non-system message
+        non_system_messages = [msg for msg in messages if msg.get("role") != "system"]
+        
+        if not non_system_messages:
+            return []
+        
         normalized = []
-        first_user_seen = False
-        for msg in messages:
+        first_role = non_system_messages[0].get("role")
+        
+        # If first message is assistant and we have system content, add system as user message
+        if first_role == "assistant" and system_content:
+            normalized.append({"role": "user", "content": system_content})
+        
+        # Process all non-system messages
+        for i, msg in enumerate(non_system_messages):
             role = msg.get("role")
             content = msg.get("content", "")
-
-            if role == "system":
-                continue
-
+            
+            # Convert assistant to model
             if role == "assistant":
                 role = "model"
-
-            if role == "user" and not first_user_seen and system_content:
+            
+            # Merge system into first user message (if first message is user)
+            if role == "user" and i == 0 and first_role == "user" and system_content:
                 content = f"{system_content}\n\n{content}"
-                first_user_seen = True
-
+            
             normalized.append({"role": role, "content": content})
+        
         return normalized
 
 
