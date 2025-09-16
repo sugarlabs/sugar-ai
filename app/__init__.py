@@ -56,10 +56,12 @@ def create_app() -> FastAPI:
     from app.routes.admin import router as admin_router
     from app.routes.auth import router as auth_router
     from app.routes.web import router as web_router
+    from app.routes.webhook import router as webhook_router
     
     app.include_router(api_router)
     app.include_router(admin_router)
     app.include_router(auth_router)
     app.include_router(web_router)
+    app.include_router(webhook_router)
     
     return app

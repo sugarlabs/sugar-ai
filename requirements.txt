@@ -18,3 +18,4 @@ itsdangerous
 httpx
 pydantic-settings
 sentence-transformers
+python-dotenv
