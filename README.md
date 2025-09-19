@@ -415,6 +415,10 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 Review the terminal output for further details and error messages.
 
+## Setting up CI/CD Environment Variables
+
+When deploying Sugar-AI in CI/CD pipelines, you'll need to configure environment variables properly. Current CI/CD uses github webhooks. So make sure to create a webhook secret and add it to the `.env`.
+
 ## Using the Streamlit App
 
 Sugar-AI also provides a Streamlit-based interface for quick interactions and visualizations.
