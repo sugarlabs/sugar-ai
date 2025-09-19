@@ -102,7 +102,7 @@ async def webhook(request: Request):
         logger.info("Git fetch completed successfully")
         
         # Perform hard reset to origin/CI/CD
-        git_reset_command = f"cd '{REPO_PATH_LOCALLY}' && {GIT_PATH} reset --hard origin/CI/CD"
+        git_reset_command = f"cd '{REPO_PATH_LOCALLY}' && {GIT_PATH} reset --hard origin/main"
         logger.info(f"Executing git reset: {git_reset_command}")
         
         reset_result = os.system(git_reset_command)
