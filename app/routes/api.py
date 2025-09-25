@@ -108,8 +108,14 @@ async def ask_question(
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
         # check quota
-        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
+        api_key = next(
+            key for key, value in settings.API_KEYS.items()
+            if value['name'] == user_info['name']
+        )
+        remaining = (
+            settings.MAX_DAILY_REQUESTS
+            - user_quotas.get(api_key, {}).get("count", 0)
+        )
         
         return {
             "answer": answer, 
@@ -253,12 +259,18 @@ async def chat_completions(
     # Log the last user message for tracking
     user_messages = [msg for msg in request_data.messages if msg.role == "user"]
     last_user_msg = user_messages[-1].content if user_messages else "No user message"
-    logger.info(f"REQUEST - /chat/completions - User: {user_info['name']} - IP: {client_ip} - Last message: {last_user_msg[:200]}...")
+    logger.info(
+        f"REQUEST - /chat/completions - User: {user_info['name']} - "
+        f"IP: {client_ip} - Last message: {last_user_msg[:200]}..."
+    )
     
     # Log system message if present
     system_messages = [msg for msg in request_data.messages if msg.role == "system"]
     if system_messages:
-        logger.info(f"SYSTEM PROMPT - User: {user_info['name']} - Prompt: {system_messages[0].content[:100]}...")
+        logger.info(
+            f"SYSTEM PROMPT - User: {user_info['name']} - "
+            f"Prompt: {system_messages[0].content[:100]}..."
+        )
     
     try:
         # Convert Pydantic messages to dict format for the agent function
@@ -276,7 +288,10 @@ async def chat_completions(
         )
         
         process_time = time.time() - start_time
-        logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
+        logger.info(
+            f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s - "
+            f"Last message: {last_user_msg[:200]}..."
+        )
         
         # Check quota
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
@@ -305,7 +320,10 @@ async def chat_completions(
         }
         
     except Exception as e:
-        logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
+        logger.error(
+            f"ERROR - User: {user_info['name']} - Error: {str(e)} - "
+            f"Last message: {last_user_msg[:200]}..."
+        )
         raise HTTPException(status_code=500, detail=f"Error processing chat completion: {str(e)}")
 
 @router.post("/change-model")

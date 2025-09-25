@@ -257,7 +257,7 @@ class RAGAgent:
         except Exception as e:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
 
-    def _normalize_chat_messages(self, messages: list) -> list:
+    def _normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
         """
         Normalize messages to roles expected by Gemma chat template.
         - Convert 'assistant' -> 'model'
@@ -304,7 +304,8 @@ class RAGAgent:
 
 
     def _extract_after_prompt(self, full_text: str, prompt: str, eos_token: str = None) -> str:
-        """Return the model completion that comes after the prompt.
+        """
+        Return the model's generated output that follows the input prompt.
         Keeps logic minimal; optionally trims at eos token or first blank paragraph.
         """
         # Remove prompt prefix if present
