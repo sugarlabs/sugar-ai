@@ -193,7 +193,62 @@ print(result["answer"])
 </code></pre>
     </div>
 
-    <h4 style="margin-top: 30px">API Endpoints</h4>
+    <h4 style="margin-top: 30px">API Endpoints Overview</h4>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+      <thead>
+        <tr style="background: var(--primary-color); color: white;">
+          <th style="padding: 12px; text-align: left; border-bottom: 1px solid #ddd;">Endpoint</th>
+          <th style="padding: 12px; text-align: left; border-bottom: 1px solid #ddd;">Purpose</th>
+          <th style="padding: 12px; text-align: left; border-bottom: 1px solid #ddd;">Input Format</th>
+          <th style="padding: 12px; text-align: left; border-bottom: 1px solid #ddd;">Key Features</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 12px; font-weight: bold; color: var(--primary-color);">/ask</td>
+          <td style="padding: 12px;">RAG-enabled answers</td>
+          <td style="padding: 12px;">Query parameter</td>
+          <td style="padding: 12px;">
+            • Retrieval-Augmented Generation<br>
+            • Sugar/Pygame/GTK documentation<br>
+            • Child-friendly responses
+          </td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 12px; font-weight: bold; color: var(--primary-color);">/ask-llm</td>
+          <td style="padding: 12px;">Direct LLM without RAG</td>
+          <td style="padding: 12px;">Query parameter</td>
+          <td style="padding: 12px;">
+            • No document retrieval<br>
+            • Direct model access<br>
+            • Faster responses
+          </td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 12px; font-weight: bold; color: var(--primary-color);">/ask-llm-prompted</td>
+          <td style="padding: 12px;">Custom prompt with advanced controls</td>
+          <td style="padding: 12px;">JSON body</td>
+          <td style="padding: 12px;">
+            • Custom system prompts<br>
+            • Configurable generation parameters<br>
+            • Maximum flexibility
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; font-weight: bold; color: var(--primary-color);">/debug</td>
+          <td style="padding: 12px;">Python code debugging</td>
+          <td style="padding: 12px;">Query parameters</td>
+          <td style="padding: 12px;">
+            • Kid-friendly debugging suggestions<br>
+            • Context mode for explanations<br>
+            • Educational focus
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4 style="margin-top: 30px">Quick Reference</h4>
     <ul>
       <li>
         <strong>/ask</strong> - Get answers with Retrieval-Augmented
@@ -202,6 +257,9 @@ print(result["answer"])
       <li>
         <strong>/ask-llm</strong> - Get direct responses from the language
         model
+      </li>
+      <li>
+        <strong>/ask-llm-prompted</strong> - Custom prompts with advanced generation controls
       </li>
       <li>
         <strong>/debug</strong> - Get kid-friendly debugging suggestions for Python code
@@ -279,6 +337,92 @@ context: true | false  # turn on context mode (explains code in a kid-friendly w
         <h4>Example Request:</h4>
         <pre>curl -X POST "http://localhost:8000/ask-llm?question=What%20is%20the%20difference%20between%20lists%20and%20tuples?" \
     -H "X-API-Key: your_api_key"</pre>
+      </div>
+    </div>
+    
+    <div class="endpoint">
+      <h3>Custom Prompt with Advanced Controls</h3>
+      <div class="endpoint-method">POST</div>
+      <div class="endpoint-url">/ask-llm-prompted</div>
+      <p>A powerful endpoint that allows custom system prompts and configurable generation parameters for maximum flexibility.</p>
+      
+      <div class="endpoint-details">
+        <h4>Headers:</h4>
+        <pre>X-API-Key: your_api_key
+Content-Type: application/json</pre>
+        
+        <h4>Features:</h4>
+        <ul>
+          <li>Custom system prompts for specific use cases</li>
+          <li>Configurable generation parameters</li>
+          <li>Direct LLM access without RAG</li>
+          <li>Suitable for specialized activities and applications</li>
+        </ul>
+        
+        <h4>Basic Usage:</h4>
+        <pre>curl -X POST "http://localhost:8000/ask-llm-prompted" \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How do I create a Pygame window?",
+    "custom_prompt": "You are a Python expert. Provide detailed code examples with explanations."
+  }'</pre>
+        
+        <h4>Advanced Usage with Generation Parameters:</h4>
+        <pre>curl -X POST "http://localhost:8000/ask-llm-prompted" \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Write a function to calculate fibonacci numbers",
+    "custom_prompt": "You are a coding tutor. Explain step-by-step with comments.",
+    "max_length": 1024,
+    "truncation": true,
+    "repetition_penalty": 1.1,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 50
+  }'</pre>
+        
+        <h4>Request Parameters:</h4>
+        <ul>
+          <li><strong>question</strong> (required): The question or task to process</li>
+          <li><strong>custom_prompt</strong> (required): Your custom system prompt</li>
+          <li><strong>max_length</strong> (optional, default: 1024): Maximum length of generated response</li>
+          <li><strong>truncation</strong> (optional, default: true): Whether to truncate long inputs</li>
+          <li><strong>repetition_penalty</strong> (optional, default: 1.1): Controls repetition (1.0 = no penalty, >1.0 = less repetition)</li>
+          <li><strong>temperature</strong> (optional, default: 0.7): Controls randomness (0.0 = deterministic, 1.0 = very random)</li>
+          <li><strong>top_p</strong> (optional, default: 0.9): Nucleus sampling (0.1 = focused, 0.9 = diverse)</li>
+          <li><strong>top_k</strong> (optional, default: 50): Limits vocabulary to K most likely words</li>
+        </ul>
+        
+        <h4>Response Format:</h4>
+        <pre>{
+  "answer": "Here's how to create a Pygame window:...",
+  "user": "Your Username",
+  "quota": {"remaining": 95, "total": 100},
+  "generation_params": {
+    "max_length": 1024,
+    "truncation": true,
+    "repetition_penalty": 1.1,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 50
+  }
+}</pre>
+
+        <h4>Generation Parameter Guidelines:</h4>
+        <ul>
+          <li><strong>For Code:</strong> temperature: 0.2-0.4, top_p: 0.8, repetition_penalty: 1.1</li>
+          <li><strong>For Creative Content:</strong> temperature: 0.7-0.9, top_p: 0.9, repetition_penalty: 1.2</li>
+          <li><strong>For Factual Answers:</strong> temperature: 0.3-0.5, top_p: 0.7, repetition_penalty: 1.0</li>
+        </ul>
+        
+        <h4>Use Cases:</h4>
+        <p>Different activities can use different system prompts and generation parameters to achieve a model that is personalized to specific activity needs. Some example are: </p>
+        <ul>
+          <li>Speak-AI activity can use this endpoint with custom prompts for different personas in the chatbot</li>
+          <li>Pippy Activity can use this endpoint with custom prompts to make a code-debugger</li>
+        </ul>
       </div>
     </div>
     

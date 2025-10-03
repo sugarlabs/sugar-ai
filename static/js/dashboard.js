@@ -10,6 +10,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const toggleApiKeyBtn = document.getElementById('toggle-api-key');
     const copyApiKeyBtn = document.getElementById('copy-api-key');
     
+    // New elements for endpoint selection
+    const endpointRadios = document.querySelectorAll('input[name="endpoint-choice"]');
+    const customPromptOptions = document.getElementById('custom-prompt-options');
+    const customPromptTextarea = document.getElementById('custom-prompt');
+    const presetBtns = document.querySelectorAll('.preset-btn');
+    
+    // Parameter elements
+    const temperatureInput = document.getElementById('temperature');
+    const topPInput = document.getElementById('top-p');
+    const topKInput = document.getElementById('top-k');
+    const maxLengthInput = document.getElementById('max-length');
+    const repetitionPenaltyInput = document.getElementById('repetition-penalty');
+    const truncationInput = document.getElementById('truncation');
+    
     // add a user message to the chat
     function addUserMessage(message) {
         const messageElement = document.createElement('div');
@@ -93,6 +107,45 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
     
+    // handle endpoint selection changes
+    function handleEndpointChange() {
+        const selectedEndpoint = document.querySelector('input[name="endpoint-choice"]:checked').value;
+        if (selectedEndpoint === 'ask-llm-prompted') {
+            customPromptOptions.style.display = 'block';
+        } else {
+            customPromptOptions.style.display = 'none';
+        }
+    }
+    
+    // handle preset button clicks
+    function applyPreset(presetType) {
+        if (!temperatureInput || !topPInput || !repetitionPenaltyInput) return;
+        
+        switch (presetType) {
+            case 'code':
+                temperatureInput.value = '0.3';
+                topPInput.value = '0.8';
+                repetitionPenaltyInput.value = '1.1';
+                break;
+            case 'creative':
+                temperatureInput.value = '0.8';
+                topPInput.value = '0.9';
+                repetitionPenaltyInput.value = '1.2';
+                break;
+            case 'factual':
+                temperatureInput.value = '0.4';
+                topPInput.value = '0.7';
+                repetitionPenaltyInput.value = '1.0';
+                break;
+        }
+    }
+    
+    // get selected endpoint type
+    function getSelectedEndpoint() {
+        const selectedRadio = document.querySelector('input[name="endpoint-choice"]:checked');
+        return selectedRadio ? selectedRadio.value : 'ask';
+    }
+    
     // send a message to the API
     async function sendMessage(message) {
         addUserMessage(message);
@@ -100,15 +153,45 @@ document.addEventListener('DOMContentLoaded', function() {
         const typingIndicator = showTypingIndicator();
         
         try {
-            const endpoint = useRag.checked ? '/ask' : '/ask-llm';
+            const selectedEndpoint = getSelectedEndpoint();
             const apiKey = apiKeyField.value;
-            const response = await fetch(`${endpoint}?question=${encodeURIComponent(message)}`, {
-                method: 'POST',
-                headers: {
-                    'X-API-Key': apiKey
-                },
-                credentials: 'same-origin'
-            });
+            let response;
+            
+            if (selectedEndpoint === 'ask-llm-prompted') {
+                // Custom prompt endpoint with JSON body
+                const requestBody = {
+                    question: message,
+                    custom_prompt: customPromptTextarea.value || 'You are a helpful assistant. Provide clear and detailed answers.'
+                };
+                
+                // Add generation parameters if they exist
+                if (temperatureInput) requestBody.temperature = parseFloat(temperatureInput.value);
+                if (topPInput) requestBody.top_p = parseFloat(topPInput.value);
+                if (topKInput) requestBody.top_k = parseInt(topKInput.value);
+                if (maxLengthInput) requestBody.max_length = parseInt(maxLengthInput.value);
+                if (repetitionPenaltyInput) requestBody.repetition_penalty = parseFloat(repetitionPenaltyInput.value);
+                if (truncationInput) requestBody.truncation = truncationInput.checked;
+                
+                response = await fetch('/ask-llm-prompted', {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody),
+                    credentials: 'same-origin'
+                });
+            } else {
+                // Standard endpoints with query parameters
+                const endpoint = selectedEndpoint === 'ask' ? '/ask' : '/ask-llm';
+                response = await fetch(`${endpoint}?question=${encodeURIComponent(message)}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKey
+                    },
+                    credentials: 'same-origin'
+                });
+            }
             
             if (!response.ok) {
                 throw new Error(`API returned ${response.status}: ${response.statusText}`);
@@ -201,4 +284,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 2000);
         });
     }
+    
+    // endpoint selection event listeners
+    endpointRadios.forEach(radio => {
+        radio.addEventListener('change', handleEndpointChange);
+    });
+    
+    // preset button event listeners
+    presetBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            applyPreset(this.dataset.preset);
+        });
+    });
+    
+    // initialize custom prompt visibility
+    handleEndpointChange();
 });

@@ -184,3 +184,105 @@ header {
 .btn-danger:hover {
     background-color: #c0392b;
 }
+
+/* Endpoint selection styles */
+input[type="radio"] {
+    margin-right: 8px;
+}
+
+.endpoint-option {
+    margin-bottom: 15px;
+}
+
+.endpoint-option label {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.endpoint-option p {
+    margin: 5px 0 0 25px;
+    color: #777;
+    font-size: 0.9em;
+}
+
+/* Custom prompt options styles */
+#custom-prompt-options {
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+#custom-prompt {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* Generation parameters grid */
+.param-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.param-grid label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.param-grid input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Preset buttons */
+.preset-btn {
+    margin-right: 10px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: opacity 0.3s;
+}
+
+.preset-btn:hover {
+    opacity: 0.8;
+}
+
+/* Parameter presets info box */
+.presets-info {
+    margin-top: 15px;
+    padding: 10px;
+    background: #e3f2fd;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.presets-info strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* Details/summary styling */
+details summary {
+    cursor: pointer;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+details[open] summary {
+    margin-bottom: 15px;
+}

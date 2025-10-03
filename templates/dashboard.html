@@ -75,13 +75,84 @@
                 </div>
                 
                 <div style="margin-top: 20px;">
-                    <label>
-                        <input type="checkbox" id="use-rag" checked> 
-                        Use RAG (Retrieval-Augmented Generation)
-                    </label>
-                    <p style="color: #777; font-size: 0.9em;">
-                        RAG enhances responses with information from Sugar documentation.
-                    </p>
+                    <div style="margin-bottom: 15px;">
+                        <label>
+                            <input type="radio" name="endpoint-choice" value="ask" checked> 
+                            RAG (Retrieval-Augmented Generation)
+                        </label>
+                        <p style="color: #777; font-size: 0.9em; margin: 5px 0 0 25px;">
+                            Enhanced responses with information from Sugar documentation.
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label>
+                            <input type="radio" name="endpoint-choice" value="ask-llm"> 
+                            Direct LLM
+                        </label>
+                        <p style="color: #777; font-size: 0.9em; margin: 5px 0 0 25px;">
+                            Faster responses directly from the language model.
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label>
+                            <input type="radio" name="endpoint-choice" value="ask-llm-prompted"> 
+                            Custom Prompt
+                        </label>
+                        <p style="color: #777; font-size: 0.9em; margin: 5px 0 0 25px;">
+                            Use custom prompts and advanced generation parameters.
+                        </p>
+                    </div>
+                    
+                    <!-- Custom prompt options (initially hidden) -->
+                    <div id="custom-prompt-options" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="margin-bottom: 15px;">
+                            <label for="custom-prompt" style="display: block; margin-bottom: 5px; font-weight: bold;">System Prompt:</label>
+                            <textarea id="custom-prompt" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" placeholder="You are a helpful assistant. Provide clear and detailed answers."></textarea>
+                        </div>
+                        
+                        <details style="margin-bottom: 10px;">
+                            <summary style="cursor: pointer; font-weight: bold; color: #666;">Advanced Generation Parameters</summary>
+                            <div class="param-grid">
+                                <div>
+                                    <label for="temperature">Temperature (0.0-1.0):</label>
+                                    <input type="number" id="temperature" min="0" max="1" step="0.1" value="0.7">
+                                </div>
+                                <div>
+                                    <label for="top-p">Top P (0.1-1.0):</label>
+                                    <input type="number" id="top-p" min="0.1" max="1" step="0.1" value="0.9">
+                                </div>
+                                <div>
+                                    <label for="top-k">Top K (1-100):</label>
+                                    <input type="number" id="top-k" min="1" max="100" value="50">
+                                </div>
+                                <div>
+                                    <label for="max-length">Max Length:</label>
+                                    <input type="number" id="max-length" min="100" max="2048" value="1024">
+                                </div>
+                                <div>
+                                    <label for="repetition-penalty">Repetition Penalty:</label>
+                                    <input type="number" id="repetition-penalty" min="0.5" max="2" step="0.1" value="1.1">
+                                </div>
+                                <div style="display: flex; align-items: center;">
+                                    <label>
+                                        <input type="checkbox" id="truncation" checked> 
+                                        Enable Truncation
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="presets-info">
+                                <strong>Quick Presets:</strong>
+                                <div style="margin-top: 5px;">
+                                    <button type="button" class="preset-btn" data-preset="code" style="background: #007bff; color: white;">Code</button>
+                                    <button type="button" class="preset-btn" data-preset="creative" style="background: #28a745; color: white;">Creative</button>
+                                    <button type="button" class="preset-btn" data-preset="factual" style="background: #ffc107; color: black;">Factual</button>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
                 </div>
             </main>
         </div>
