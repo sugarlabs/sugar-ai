@@ -19,3 +19,5 @@ httpx
 pydantic-settings
 sentence-transformers
 python-dotenv
+requests
+beautifulsoup4
