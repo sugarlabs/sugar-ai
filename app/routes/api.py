@@ -26,12 +26,12 @@ class PromptedLLMRequest(BaseModel):
     question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
     custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
     messages: Optional[List[ChatMessage]] = Field(None, description="List of chat messages (required if chat=True)")
-    max_length: int = Field(1024, description="Maximum length of generated text")
+    max_length: int = Field(1024, ge=1, le=2048, description="Maximum length of generated text")
     truncation: bool = Field(True, description="Whether to truncate input if too long")
-    repetition_penalty: float = Field(1.1, description="Repetition penalty")
-    temperature: float = Field(0.7, description="Temperature for sampling")
-    top_p: float = Field(0.9, description="Top-p (nucleus) sampling parameter")
-    top_k: int = Field(50, description="Top-k sampling parameter")
+    repetition_penalty: float = Field(1.1, ge=1.0, le=1.5, description="Repetition penalty")
+    temperature: float = Field(0.7, ge=0.0, le=1.0, description="Temperature for sampling")
+    top_p: float = Field(0.9, ge=0.0, le=1.0, description="Top-p (nucleus) sampling parameter")
+    top_k: int = Field(50, ge=1, le=100, description="Top-k sampling parameter")
 
 router = APIRouter(tags=["api"])
 
@@ -40,7 +40,8 @@ logger = logging.getLogger("sugar-ai")
 
 # load ai agent and document paths
 agent = RAGAgent(model=settings.DEFAULT_MODEL)
-agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
+if settings.DOC_PATHS:
+    agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
