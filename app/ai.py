@@ -3,6 +3,7 @@ AI functionality for Sugar-AI, including RAG and LLM components.
 """
 import os
 import torch
+import logging
 from transformers import pipeline
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -11,6 +12,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
 from typing import Optional, List
 import app.prompts as prompts
+logger = logging.getLogger("sugar-ai")
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -116,7 +118,9 @@ class RAGAgent:
                     loader = TextLoader(file_path)
                 documents = loader.load()
                 all_documents.extend(documents)
-        
+        if not all_documents:
+            logger.warning("No documents loaded. Retriever will not be initialized.")
+            return None
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
