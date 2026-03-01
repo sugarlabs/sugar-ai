@@ -12,7 +12,7 @@ load_dotenv()
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     API_KEYS: Dict[str, Dict[str, Any]] = json.loads(os.getenv("API_KEYS", "{}"))
-    MODEL_CHANGE_PASSWORD: str = os.getenv("MODEL_CHANGE_PASSWORD", "")
+    MODEL_CHANGE_PASSWORD: str = os.getenv("MODEL_CHANGE_PASSWORD", "changeme")
     DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "Qwen/Qwen2-1.5B-Instruct")
     DOC_PATHS: List[str] = json.loads(os.getenv("DOC_PATHS", '["./docs/Pygame Documentation.pdf", "./docs/Python GTK+3 Documentation.pdf", "./docs/Sugar Toolkit Documentation.pdf"]'))
     MAX_DAILY_REQUESTS: int = int(os.getenv("MAX_DAILY_REQUESTS", 100))
