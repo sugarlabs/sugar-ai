@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 import torch
 from openai import OpenAI
+from anthropic import Anthropic
 from transformers import pipeline
 
 
@@ -69,3 +70,29 @@ class HuggingFaceProvider(BaseProvider):
             **kwargs,
         )
         return response.choices[0].message.content
+    
+    class AnthropicProvider(BaseProvider):
+        """AI provider using Anthropic API."""
+
+    def __init__(self, api_key: str, model: str):
+        self.client = Anthropic(api_key=api_key)
+        self.model = model
+
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": question}],
+        )
+        return response.content[0].text
+
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            messages=messages,
+            **kwargs,
+        )
+        return response.content[0].text
