@@ -96,3 +96,30 @@ class HuggingFaceProvider(BaseProvider):
             **kwargs,
         )
         return response.content[0].text
+    
+    class OllamaProvider(BaseProvider):
+        """AI provider using local Ollama models."""
+
+    def __init__(self, model: str):
+        self.client = OpenAI(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
+        )
+        self.model = model
+
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": question}],
+        )
+        return response.choices[0].message.content
+
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            **kwargs,
+        )
+        return response.choices[0].message.content
