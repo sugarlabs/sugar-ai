@@ -98,7 +98,7 @@ class RAGAgent:
         self.model = pipeline(
             "text-generation",
             model=model,
-            max_length=1024,
+            max_new_tokens=1024,
             truncation=True,
             torch_dtype=torch.float16
         )
