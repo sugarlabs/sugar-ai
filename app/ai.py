@@ -9,8 +9,12 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from typing import Optional, List
 import app.prompts as prompts
+from app.config import settings
+import logging
+logger = logging.getLogger("sugar-ai")
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -34,15 +38,29 @@ def extract_answer_from_output(outputs):
 
 class RAGAgent:
     """Retrieval-Augmented Generation agent for Sugar-AI"""
-    
-    def __init__(self, model: str = "google/gemma-3-27b-it", quantize: bool = True):
-        # disable quantization if CUDA is not available
-        self.use_quant = quantize and torch.cuda.is_available()
-        self.model_name = model
-        
-        if self.use_quant:
-            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+      
+    def __init__(self, model: Optional[str] = None, quantize: bool = True):
+        # 1) Determine model name with clear precedence:
+        #    explicit argument > DEV_MODEL_NAME (if DEV_MODE) > PROD_MODEL_NAME > DEFAULT_MODEL
+        if model:
+            self.model_name = model
+            logger.info("Using explicit model argument: %s", self.model_name)
+        else:
+            if getattr(settings, "DEV_MODE", False):
+                # prefer DEV_MODEL_NAME, then fallback to DEFAULT_MODEL
+                self.model_name = getattr(settings, "DEV_MODEL_NAME", settings.DEFAULT_MODEL)
+                logger.info("DEV_MODE active: using lightweight model %s", self.model_name)
+            else:
+                # production: prefer PROD_MODEL_NAME, else DEFAULT_MODEL
+                self.model_name = getattr(settings, "PROD_MODEL_NAME", settings.DEFAULT_MODEL)
+                logger.info("Using production model %s", self.model_name)
 
+        # 2) Compute quantization/device choices. Keep quantization off in DEV_MODE by default.
+        self.use_quant = quantize and torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False)
+        device = 0 if torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False) else -1
+        dtype = torch.float16 if device == 0 else torch.float32
+
+        if self.use_quant:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
@@ -50,9 +68,9 @@ class RAGAgent:
                 bnb_4bit_quant_type="nf4"
             )
 
-            tokenizer = AutoTokenizer.from_pretrained(model)
+            tokenizer = AutoTokenizer.from_pretrained(self.model_name)
             model_obj = AutoModelForCausalLM.from_pretrained(
-                model,
+                self.model_name,
                 quantization_config=bnb_config,
                 torch_dtype=torch.float16,
                 device_map="auto"
@@ -75,11 +93,11 @@ class RAGAgent:
         else:
             self.model = pipeline(
                 "text-generation",
-                model=model,
+                model=self.model_name,
                 max_new_tokens=1024,
                 truncation=True,
-                torch_dtype=torch.float16,
-                device=0 if torch.cuda.is_available() else -1,
+                torch_dtype=dtype, # Use the dynamic dtype
+                device=device,     # Use the dynamic device
             )
 
             self.simplify_model = self.model
@@ -97,7 +115,7 @@ class RAGAgent:
         self.model_name = model
         self.model = pipeline(
             "text-generation",
-            model=model,
+            model=self.model_name,
             max_length=1024,
             truncation=True,
             torch_dtype=torch.float16

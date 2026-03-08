@@ -38,9 +38,8 @@ router = APIRouter(tags=["api"])
 # setup logging
 logger = logging.getLogger("sugar-ai")
 
-# load ai agent and document paths
-agent = RAGAgent(model=settings.DEFAULT_MODEL)
-agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
+# Initialize the agent
+agent = None
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
