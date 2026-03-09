@@ -2,6 +2,7 @@
 API routes for Sugar-AI.
 """
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from app.main import QuestionRequest           
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 import time
@@ -19,7 +20,13 @@ from app.config import settings
 class ChatMessage(BaseModel):
     role: str  # "system", "user", "assistant" 
     content: str
-
+class QuestionRequest(BaseModel):
+    question: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="User question"
+    )
 class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
     chat: bool = Field(False, description="Enable chat mode (uses messages instead of question)")
@@ -82,10 +89,11 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), req
 
 @router.post("/ask")
 async def ask_question(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    data: QuestionRequest,
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
+    question = data.question
     """Process a question using RAG pipeline"""
     start_time = time.time()
     
@@ -120,10 +128,11 @@ async def ask_question(
 
 @router.post("/ask-llm")
 async def ask_llm(
-    question: str, 
+    data: QuestionRequest,
     user_info: dict = Depends(verify_api_key), 
     request: Request = None
 ):
+    question = data.question
     """Process a question with direct LLM call (no retrieval)"""
     start_time = time.time()
     
