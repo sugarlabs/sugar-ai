@@ -27,7 +27,15 @@ from app import create_app
 from app.database import get_db
 from app.auth import sync_env_keys_to_db
 from app.config import settings
+from pydantic import BaseModel, Field
 
+class QuestionRequest(BaseModel):
+    question: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="User question for the RAG system"
+    )
 # setup logging
 logger = logging.getLogger("sugar-ai")
 
