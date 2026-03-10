@@ -183,8 +183,17 @@ class RAGAgent:
             {"role": "user", "content": question}
         ]
         
-        intent_response = self.run_chat_completion(messages)
-        intent_text = str(intent_response).strip()
+        try:
+            intent_response = self.run_chat_completion(
+                messages,
+                max_length=50,
+                temperature=0.0
+            )
+            intent_text = str(intent_response).strip()
+        except Exception:
+            # Fallback: if chat-style intent routing fails (e.g., no chat template),
+            # treat the question as technical so we still run the RAG pipeline.
+            intent_text = "TECHNICAL"
         
         # If it's not explicitly flagged as technical, return the generated response
         if not intent_text.upper().startswith("TECHNICAL"):
