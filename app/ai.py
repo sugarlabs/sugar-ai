@@ -91,7 +91,7 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
-
+        # Intent routing uses prompts.INTENT_ROUTER_PROMPT natively via chat_completion
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
         self.model_name = model
@@ -177,6 +177,19 @@ class RAGAgent:
 
     def run(self, question: str) -> str:
         """Process a question through the RAG pipeline"""
+        # Check intent first using proper chat formatting
+        messages = [
+            {"role": "system", "content": prompts.INTENT_ROUTER_PROMPT},
+            {"role": "user", "content": question}
+        ]
+        
+        intent_response = self.run_chat_completion(messages)
+        intent_text = str(intent_response).strip()
+        
+        # If it's not explicitly flagged as technical, return the generated response
+        if not intent_text.upper().startswith("TECHNICAL"):
+            return intent_text
+
         # build chain components
         chain_input = {
             "context": self.retriever | format_docs,
