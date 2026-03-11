@@ -38,9 +38,8 @@ router = APIRouter(tags=["api"])
 # setup logging
 logger = logging.getLogger("sugar-ai")
 
-# load ai agent and document paths
+# load ai agent 
 agent = RAGAgent(model=settings.DEFAULT_MODEL)
-agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
@@ -93,6 +92,11 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
+        # Lazy load vector store if not initialized
+        if agent.retriever is None:
+            logger.info("Initializing vector store...")
+            agent.setup_vectorstore(settings.DOC_PATHS)
+            
         answer = agent.run(question)
         
         # log completion

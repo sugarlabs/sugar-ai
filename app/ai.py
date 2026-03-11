@@ -3,6 +3,7 @@ AI functionality for Sugar-AI, including RAG and LLM components.
 """
 import os
 import torch
+import logging
 from transformers import pipeline
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -11,6 +12,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
 from typing import Optional, List
 import app.prompts as prompts
+logger = logging.getLogger("sugar-ai")
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -118,10 +120,25 @@ class RAGAgent:
                 all_documents.extend(documents)
         
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
-        
-        vector_store = FAISS.from_documents(all_documents, embeddings)
+
+        index_path = "vector_store"
+
+        # Load existing FAISS index if available
+        if os.path.exists(index_path):
+            logger.info("Loading existing FAISS vector store...")
+            vector_store = FAISS.load_local(
+                index_path,
+                embeddings,
+                allow_dangerous_deserialization=True
+            )
+
+        else:
+            logger.info("Creating new FAISS vector store...")
+            vector_store = FAISS.from_documents(all_documents, embeddings)
+            vector_store.save_local(index_path)
+
         self.retriever = vector_store.as_retriever()
         return self.retriever
 
