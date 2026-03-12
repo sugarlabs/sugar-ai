@@ -3,6 +3,7 @@ AI functionality for Sugar-AI, including RAG and LLM components.
 """
 import os
 import torch
+from app.config import settings
 from transformers import pipeline
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -116,9 +117,8 @@ class RAGAgent:
                     loader = TextLoader(file_path)
                 documents = loader.load()
                 all_documents.extend(documents)
-        
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+            model_name=settings.EMBEDDING_MODEL
         )
         
         vector_store = FAISS.from_documents(all_documents, embeddings)
