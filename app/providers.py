@@ -1,0 +1,141 @@
+from abc import ABC, abstractmethod
+
+import torch
+from anthropic import Anthropic
+from openai import OpenAI
+from transformers import pipeline
+
+
+class BaseProvider(ABC):
+    """Abstract base class for AI model providers."""
+
+    @abstractmethod
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        pass
+
+    @abstractmethod
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        pass
+
+
+class HuggingFaceProvider(BaseProvider):
+    """AI provider using local HuggingFace models."""
+
+    def __init__(self, model: str):
+        self.model_name = model
+        self.model = pipeline(
+            "text-generation",
+            model=model,
+            max_new_tokens=1024,
+            truncation=True,
+            torch_dtype=torch.float16,
+            device=0 if torch.cuda.is_available() else -1,
+        )
+
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        result = self.model(question, return_full_text=False)
+        return result[0]["generated_text"]
+
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        prompt = messages[-1]["content"] if messages else ""
+        result = self.model(prompt, return_full_text=False, **kwargs)
+        return result[0]["generated_text"]
+
+
+class OpenAIProvider(BaseProvider):
+    """AI provider using OpenAI API."""
+
+    def __init__(self, api_key: str, model: str):
+        self.client = OpenAI(api_key=api_key)
+        self.model = model
+
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": question}],
+        )
+        return response.choices[0].message.content
+
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            **kwargs,
+        )
+        return response.choices[0].message.content
+
+
+class AnthropicProvider(BaseProvider):
+    """AI provider using Anthropic API."""
+
+    def __init__(self, api_key: str, model: str):
+        self.client = Anthropic(api_key=api_key)
+        self.model = model
+
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": question}],
+        )
+        return response.content[0].text
+
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            messages=messages,
+            **kwargs,
+        )
+        return response.content[0].text
+
+
+class OllamaProvider(BaseProvider):
+    """AI provider using local Ollama models."""
+
+    def __init__(self, model: str):
+        self.client = OpenAI(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
+        )
+        self.model = model
+
+    def run(self, question: str) -> str:
+        """Generate a response to a question."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": question}],
+        )
+        return response.choices[0].message.content
+
+    def run_chat_completion(self, messages: list, **kwargs) -> str:
+        """Generate a response from a conversation history."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            **kwargs,
+        )
+        return response.choices[0].message.content
+
+
+def get_provider(model_string: str, **kwargs) -> BaseProvider:
+    """Detect provider from model string and return appropriate provider instance."""
+    if model_string.startswith("openai/"):
+        model_name = model_string.split("/", 1)[1]
+        return OpenAIProvider(api_key=kwargs.get("api_key"), model=model_name)
+    elif model_string.startswith("anthropic/"):
+        model_name = model_string.split("/", 1)[1]
+        return AnthropicProvider(api_key=kwargs.get("api_key"), model=model_name)
+    elif model_string.startswith("ollama/"):
+        model_name = model_string.split("/", 1)[1]
+        return OllamaProvider(model=model_name)
+    else:
+        return HuggingFaceProvider(model=model_string)
