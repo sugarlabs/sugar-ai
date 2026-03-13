@@ -1,4 +1,4 @@
-transformers>=4.45.2
+transformers>=4.45.2,<5.0.0
 torch>=1.12.1
 accelerate>=0.26.0
 faiss-cpu
