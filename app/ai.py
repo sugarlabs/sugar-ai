@@ -27,13 +27,23 @@ def combine_messages(x):
     return str(x)
 
 def extract_answer_from_output(outputs):
-    """Extract the answer text from model output"""
-    generated_text = outputs[0]['generated_text']
+    """Extract the answer text from model output safely."""
+    if not outputs:
+        return ""
+
+    first = outputs[0] or {}
+    generated_text = first.get("generated_text")
+    if not isinstance(generated_text, str):
+        return ""
 
     if "Child-friendly answer:" in generated_text:
         return generated_text.split("Child-friendly answer:")[-1].strip()
-    
-    return generated_text.split("Answer:")[-1].strip()
+
+    if "Answer:" in generated_text:
+        return generated_text.split("Answer:")[-1].strip()
+
+    # Fallback: return the full generated text trimmed.
+    return generated_text.strip()
 
 
 class RAGAgent:
@@ -307,9 +317,9 @@ class RAGAgent:
         for i, msg in enumerate(non_system_messages):
             role = msg.get("role")
             content = msg.get("content", "")
-            
-            # Convert assistant to model
-            if role == "assistant":
+
+            # Convert assistant to model only for Gemma-style chat templates
+            if role == "assistant" and "gemma" in str(self.model_name).lower():
                 role = "model"
             
             # Merge system into first user message (if first message is user)
