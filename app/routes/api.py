@@ -38,6 +38,12 @@ router = APIRouter(tags=["api"])
 # setup logging
 logger = logging.getLogger("sugar-ai")
 
+AVAILABLE_MODELS = [
+    "Qwen2-1.5B",
+    "Mistral",
+    "Llama"
+]
+
 # load ai agent and document paths
 agent = RAGAgent(model=settings.DEFAULT_MODEL)
 agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
@@ -327,3 +333,15 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+
+@router.get("/models")
+async def get_models():
+    """Return list of available AI models"""
+    return {
+        "models": [
+            "Qwen2-1.5B",
+            "Mistral",
+            "Llama"
+        ],
+        "default_model": settings.DEFAULT_MODEL
+    }
