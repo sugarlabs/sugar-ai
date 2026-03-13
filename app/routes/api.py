@@ -8,6 +8,7 @@ import time
 import logging
 import os
 import json
+import threading
 from datetime import datetime
 from typing import Dict, Optional, List
 
@@ -40,7 +41,16 @@ logger = logging.getLogger("sugar-ai")
 
 # load ai agent and document paths
 agent = RAGAgent(model=settings.DEFAULT_MODEL)
-agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
+
+def build_vectorstore():
+    logger.info("Starting background vector store indexing...")
+    try:
+        agent.setup_vectorstore(settings.DOC_PATHS)
+        logger.info("Vector store indexing complete.")
+    except Exception as e:
+        logger.error(f"Vector store indexing failed: {str(e)}")
+
+threading.Thread(target=build_vectorstore, daemon=True).start()
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
@@ -93,6 +103,12 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
+        if agent.retriever is None:
+           raise HTTPException(
+               status_code=503,
+               detail="Vector store is still initializing. Please try again shortly."
+           )
+           
         answer = agent.run(question)
         
         # log completion
@@ -114,6 +130,9 @@ async def ask_question(
             "user": user_info["name"],
             "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
         }
+    except HTTPException:
+        raise
+
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
