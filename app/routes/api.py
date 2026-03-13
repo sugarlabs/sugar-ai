@@ -50,7 +50,6 @@ def check_quota(api_key: str) -> bool:
     
     if api_key not in user_quotas:
         user_quotas[api_key] = {"count": 0, "date": today}
-        return True
         
     # reset quota daily
     if user_quotas[api_key]["date"] != today:
