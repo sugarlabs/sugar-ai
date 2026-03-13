@@ -30,10 +30,26 @@ from app.auth import sync_env_keys_to_db
 from app.config import settings
 from app.routes import api
 
+
 # setup logging
 logger = logging.getLogger("sugar-ai")
 
 app = create_app()
+
+import time
+
+@app.middleware("http")
+async def log_request_time(request, call_next):
+
+    start = time.time()
+
+    response = await call_next(request)
+
+    duration = time.time() - start
+
+    print(f"{request.method} {request.url.path} took {duration:.2f}s")
+
+    return response
 
 @app.on_event("startup")
 async def startup_event():
