@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Optional, List
 
 from app.database import get_db, APIKey
-from app.ai import RAGAgent
+from app.ai import RAGAgent, extract_answer_from_output
 from app.config import settings
 
 # Pydantic models for chat completions
@@ -132,7 +132,7 @@ async def ask_llm(
     
     try:
         response = agent.model(question)
-        answer = response[0]['generated_text'].split("Answer:")[-1].strip()
+        answer = extract_answer_from_output(response)
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
