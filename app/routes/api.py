@@ -14,6 +14,7 @@ from typing import Dict, Optional, List
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.config import settings
+from app.history import add_to_history
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -108,6 +109,8 @@ async def ask_question(
             settings.MAX_DAILY_REQUESTS
             - user_quotas.get(api_key, {}).get("count", 0)
         )
+        # save to history
+        add_to_history(api_key=api_key, question=question, answer=answer, endpoint="/ask")
         
         return {
             "answer": answer, 
@@ -140,6 +143,8 @@ async def ask_llm(
         # check quota
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
+        # save to history 
+        add_to_history(api_key=api_key, question=question, answer=answer, endpoint="/ask-llm")
         
         return {
             "answer": answer, 
