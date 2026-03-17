@@ -42,8 +42,8 @@ def initialize_agent(model_name: str):
 
 @app.on_event("startup")
 async def startup_event():
-        """Initialize data on app startup"""
     try:
+        """Initialize data on app startup"""
         db = next(get_db())
         sync_env_keys_to_db(db)
         
