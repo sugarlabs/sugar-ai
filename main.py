@@ -35,26 +35,44 @@ logger = logging.getLogger("sugar-ai")
 
 app = create_app()
 
+def initialize_agent(model_name: str):
+            """Initialize the RAG agent with the given model."""
+            return RAGAgent(model=model_name)
+
+
 @app.on_event("startup")
 async def startup_event():
-    """Initialize data on app startup"""
-    db = next(get_db())
-    sync_env_keys_to_db(db)
-    if settings.DEV_MODE:
-        active_model = settings.DEV_MODEL_NAME
-        logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
-    else:
-        active_model = settings.PROD_MODEL_NAME
-        logger.info(f"PRODUCTION mode. Loading full model: {active_model}")
+        """Initialize data on app startup"""
+    try:
+        db = next(get_db())
+        sync_env_keys_to_db(db)
+        
+        if settings.DEV_MODE:
+            active_model = settings.DEV_MODEL_NAME
+            logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
+        else:
+            active_model = settings.PROD_MODEL_NAME
+            logger.info(f"PRODUCTION mode. Loading full model: {active_model}")
 
-    initialized_agent = RAGAgent(model=active_model)
-    initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
+        initialized_agent = initialize_agent(active_model)
+        
+        try:
+            initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
+        except Exception:
+            logger.error("Failed to initialize vectorstore", exc_info=True)
 
-    # Inject this instance into the API module
-    # This updates the 'agent = None' in api.py to be the real loaded model
-    api.agent = initialized_agent
+
+        # Inject this instance into the API module
+        api.agent = initialized_agent
     
-    app.state.agent = initialized_agent
+        app.state.agent = initialized_agent
+        
+        logger.info("Sugar-AI startup completed successfully.")
+        
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")
+        raise  # Re-raise to prevent app from starting if initialization fails
+    
 
 
 if __name__ == "__main__":
