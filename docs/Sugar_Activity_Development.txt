@@ -1,0 +1,189 @@
+Sugar Activity Development Guide
+=================================
+
+What is a Sugar Activity?
+-------------------------
+A Sugar Activity is an application designed for the Sugar Learning
+Platform. Activities are the primary way children interact with Sugar.
+Unlike traditional desktop applications, Activities automatically
+integrate with Sugar's collaboration features, Journal, and toolbars.
+
+Every Sugar Activity is a Python program that uses the Sugar Toolkit
+(sugar3) library to provide a consistent user experience.
+
+Basic Structure of a Sugar Activity
+------------------------------------
+A minimal Sugar Activity requires these files:
+
+  activity/
+    activity.info      - Metadata (name, icon, version, bundle_id)
+    activity-icon.svg  - Activity icon in SVG format
+  myactivity.py        - Main Python file with the Activity class
+  setup.py             - Build script
+
+The activity.info File
+-----------------------
+This file defines your Activity's metadata:
+
+  [Activity]
+  name = MyActivity
+  activity_version = 1
+  bundle_id = org.sugarlabs.MyActivity
+  exec = sugar-activity3 myactivity.MyActivity
+  icon = activity-icon
+  license = GPLv3+
+
+Fields:
+- name: Display name shown to users
+- activity_version: Integer version number, increment on each release
+- bundle_id: Unique identifier in reverse domain notation
+- exec: Entry point, format is sugar-activity3 module.ClassName
+- icon: SVG icon filename without extension
+- license: Software license (GPLv3+ recommended)
+
+Creating Your First Activity
+-----------------------------
+Here is a Hello World Activity:
+
+  from gi.repository import Gtk
+  from sugar3.activity import activity
+
+  class MyActivity(activity.Activity):
+      def __init__(self, handle):
+          activity.Activity.__init__(self, handle)
+
+          # Create a label
+          label = Gtk.Label()
+          label.set_text('Hello Sugar World!')
+
+          # Set it as the main content
+          self.set_canvas(label)
+          self.show_all()
+
+Key points:
+- Your class must inherit from sugar3.activity.activity.Activity
+- Call Activity.__init__(self, handle) in your constructor
+- Use self.set_canvas() to set the main widget
+- Call self.show_all() to display everything
+
+Using Toolbars
+---------------
+Sugar Activities use a standard toolbar system:
+
+  from sugar3.activity import activity
+  from sugar3.graphics.toolbarbox import ToolbarBox
+  from sugar3.activity.widgets import StopButton
+  from sugar3.activity.widgets import ActivityToolbarButton
+
+  class MyActivity(activity.Activity):
+      def __init__(self, handle):
+          activity.Activity.__init__(self, handle)
+
+          # Create toolbar
+          toolbar_box = ToolbarBox()
+          activity_button = ActivityToolbarButton(self)
+          toolbar_box.toolbar.insert(activity_button, 0)
+          activity_button.show()
+
+          # Add stop button
+          stop_button = StopButton(self)
+          toolbar_box.toolbar.insert(stop_button, -1)
+          stop_button.show()
+
+          self.set_toolbar_box(toolbar_box)
+          toolbar_box.show()
+
+Saving and Restoring State (Journal Integration)
+--------------------------------------------------
+Sugar Activities save state to the Journal automatically.
+Override write_file() and read_file():
+
+  def write_file(self, file_path):
+      # Save your data to file_path
+      with open(file_path, 'w') as f:
+          f.write(self.text_buffer.get_text())
+
+  def read_file(self, file_path):
+      # Restore your data from file_path
+      with open(file_path, 'r') as f:
+          self.text_buffer.set_text(f.read())
+
+Collaboration
+--------------
+Sugar Activities can be shared between users using Telepathy:
+
+  from sugar3.presence import presenceservice
+
+Activities can detect when shared and exchange data between
+participants using Telepathy tubes. The CollabWrapper library
+simplifies this process.
+
+Building and Installing
+------------------------
+To create an installable bundle (.xo file):
+
+  python3 setup.py dist_xo
+
+The setup.py file should contain:
+
+  from sugar3.activity import bundlebuilder
+  bundlebuilder.start()
+
+To install for testing:
+
+  sugar-install-bundle MyActivity-1.xo
+
+Common Widgets
+---------------
+Sugar provides special widgets in sugar3.graphics:
+
+- ToolButton: Toolbar buttons with icons
+- ToggleToolButton: Toggle buttons for toolbars
+- RadioToolButton: Radio buttons for toolbars
+- ToolbarBox: Main toolbar container
+- ToolbarButton: Expandable toolbar section
+- Icon: Sugar-themed icon widget
+- Alert: Notification dialogs
+
+Using Icons
+------------
+Sugar uses SVG icons with special color entity support.
+Icons should be 55x55 pixels and use Sugar's color scheme:
+
+  entity fill_color and stroke_color are replaced at
+  runtime with the user's chosen XO colors.
+
+Debugging Activities
+---------------------
+To run an Activity in development mode:
+
+  sugar-activity3 myactivity.MyActivity
+
+Check logs at ~/.sugar/default/logs/ for error messages.
+Use Python logging module for debug output:
+
+  import logging
+  logger = logging.getLogger('my-activity')
+  logger.debug('Debug message here')
+
+Best Practices
+---------------
+1. Keep the UI simple and child-friendly
+2. Use large buttons and clear icons
+3. Support the Journal for saving and restoring state
+4. Add collaboration support when possible
+5. Use sugar3.graphics widgets for consistent look and feel
+6. Test on both Sugar Desktop and Sugar Live Build
+7. Follow PEP 8 Python style guidelines
+8. Include translations using gettext and po files
+9. Write a proper README with usage instructions
+10. License your Activity under GPLv3+
+
+Resources
+----------
+- Sugar Activity Development Tutorial:
+  https://github.com/sugarlabs/sugar-docs
+- Hello World Activity Example:
+  https://github.com/sugarlabs/hello-world
+- Sugar Toolkit API:
+  https://github.com/sugarlabs/sugar-toolkit-gtk3
