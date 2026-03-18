@@ -2,19 +2,111 @@
 AI functionality for Sugar-AI, including RAG and LLM components.
 """
 import os
-import torch
-from transformers import pipeline
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.prompts import ChatPromptTemplate
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import logging
+import typing
 from typing import Optional, List
 import app.prompts as prompts
 from app.config import settings
-import logging
+
 logger = logging.getLogger("sugar-ai")
+
+# Lazy imports for heavy libraries
+torch = None
+transformers = None
+FAISS = None
+HuggingFaceEmbeddings = None
+PyMuPDFLoader = None
+TextLoader = None
+RunnablePassthrough = None
+ChatPromptTemplate = None
+
+def _lazy_load_deps():
+    """Lazily load heavy AI dependencies only when needed"""
+    global torch, transformers, FAISS, HuggingFaceEmbeddings, PyMuPDFLoader, TextLoader, RunnablePassthrough, ChatPromptTemplate
+    if torch is None:
+        import torch as _torch
+        torch = _torch
+    if transformers is None:
+        import transformers as _transformers
+        transformers = _transformers
+    if FAISS is None:
+        from langchain_community.vectorstores import FAISS as _FAISS
+        FAISS = _FAISS
+    if HuggingFaceEmbeddings is None:
+        from langchain_huggingface import HuggingFaceEmbeddings as _HuggingFaceEmbeddings
+        HuggingFaceEmbeddings = _HuggingFaceEmbeddings
+    if PyMuPDFLoader is None:
+        from langchain_community.document_loaders import PyMuPDFLoader as _PyMuPDFLoader
+        PyMuPDFLoader = _PyMuPDFLoader
+    if TextLoader is None:
+        from langchain_community.document_loaders import TextLoader as _TextLoader
+        TextLoader = _TextLoader
+    if RunnablePassthrough is None:
+        from langchain_core.runnables import RunnablePassthrough as _RunnablePassthrough
+        RunnablePassthrough = _RunnablePassthrough
+    if ChatPromptTemplate is None:
+        from langchain_core.prompts import ChatPromptTemplate as _ChatPromptTemplate
+        ChatPromptTemplate = _ChatPromptTemplate
+
+class ModelManager:
+    """Manages model loading and caching to optimize memory usage."""
+    _models = {}
+    _tokenizers = {}
+
+    @classmethod
+    def get_model(cls, model_name: str, quantize: bool = True):
+        """Load and return model and tokenizer (cached)"""
+        if settings.DEV_MODE:
+            logger.info("DEV_MODE active: skipping actual model load in ModelManager")
+            return None, None
+            
+        _lazy_load_deps()
+        
+        if model_name in cls._models:
+            return cls._models[model_name], cls._tokenizers[model_name]
+
+        logger.info(f"Loading model: {model_name}")
+        
+        # Determine device and dtype
+        device = 0 if torch.cuda.is_available() else -1
+        dtype = torch.float16 if device == 0 else torch.float32
+        
+        if quantize and device == 0:
+            from transformers import BitsAndBytesConfig
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
+            tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
+            model_obj = transformers.AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config=bnb_config,
+                torch_dtype=torch.float16,
+                device_map="auto"
+            )
+            pipe = transformers.pipeline(
+                "text-generation",
+                model=model_obj,
+                tokenizer=tokenizer,
+                max_new_tokens=1024,
+                truncation=True,
+            )
+        else:
+            pipe = transformers.pipeline(
+                "text-generation",
+                model=model_name,
+                max_new_tokens=1024,
+                truncation=True,
+                torch_dtype=dtype,
+                device=device,
+            )
+            tokenizer = pipe.tokenizer
+
+        cls._models[model_name] = pipe
+        cls._tokenizers[model_name] = tokenizer
+        return pipe, tokenizer
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -50,75 +142,40 @@ class RAGAgent:
     """Retrieval-Augmented Generation agent for Sugar-AI"""
       
     def __init__(self, model: Optional[str] = None, quantize: bool = True):
-        # 1) Determine model name with clear precedence:
-        #    explicit argument > DEV_MODEL_NAME (if DEV_MODE) > PROD_MODEL_NAME > DEFAULT_MODEL
+        self.model = None
+        self.simplify_model = None
+        self.retriever: Optional[typing.Any] = None
+        self.quantize = quantize
+        
+        # Determine model name with clear precedence
         if model:
             self.model_name = model
-            logger.info("Using explicit model argument: %s", self.model_name)
         else:
-            if getattr(settings, "DEV_MODE", False):
-                # prefer DEV_MODEL_NAME, then fallback to DEFAULT_MODEL
+            if settings.DEV_MODE:
                 self.model_name = getattr(settings, "DEV_MODEL_NAME", settings.DEFAULT_MODEL)
-                logger.info("DEV_MODE active: using lightweight model %s", self.model_name)
+                logger.info("DEV_MODE active: using placeholder for agent model")
             else:
-                # production: prefer PROD_MODEL_NAME, else DEFAULT_MODEL
                 self.model_name = getattr(settings, "PROD_MODEL_NAME", settings.DEFAULT_MODEL)
-                logger.info("Using production model %s", self.model_name)
-
-        # 2) Compute quantization/device choices. Keep quantization off in DEV_MODE by default.
-        self.use_quant = quantize and torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False)
-        device = 0 if torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False) else -1
-        dtype = torch.float16 if device == 0 else torch.float32
-
-        if self.use_quant:
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4"
-            )
-
-            tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            model_obj = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                quantization_config=bnb_config,
-                torch_dtype=torch.float16,
-                device_map="auto"
-            )
-            self.model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
-            
-            self.simplify_model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
-        else:
-            self.model = pipeline(
-                "text-generation",
-                model=self.model_name,
-                max_new_tokens=1024,
-                truncation=True,
-                torch_dtype=dtype, # Use the dynamic dtype
-                device=device,     # Use the dynamic device
-            )
-
-            self.simplify_model = self.model
-
-        self.retriever: Optional[FAISS] = None
+        
+        _lazy_load_deps()
         self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
         self.child_prompt = ChatPromptTemplate.from_template(prompts.CHILD_FRIENDLY_PROMPT)
         self.debug_prompt = ChatPromptTemplate.from_template(prompts.CODE_DEBUG_PROMPT)
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+
+    def ensure_model_loaded(self):
+        """Ensure the underlying models are loaded (skipped in DEV_MODE)"""
+        if settings.DEV_MODE:
+            logger.info("DEV_MODE active: skipping actual model loading in ensure_model_loaded")
+            return
+
+        if self.model is None:
+            logger.info(f"Lazily loading model for RAGAgent: {self.model_name}")
+            self.model, _ = ModelManager.get_model(self.model_name, quantize=self.quantize)
+            self.simplify_model = self.model
+
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""

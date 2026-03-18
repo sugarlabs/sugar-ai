@@ -34,6 +34,12 @@ class PromptedLLMRequest(BaseModel):
     top_k: int = Field(50, description="Top-k sampling parameter")
 
 router = APIRouter(tags=["api"])
+@router.get("/list-models")
+def list_models():
+    """
+    Returns a list of available models.
+    """
+    return {"models": settings.AVAILABLE_MODELS}
 
 # setup logging
 logger = logging.getLogger("sugar-ai")
@@ -92,13 +98,10 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
+        agent.ensure_model_loaded()
         answer = agent.run(question)
-        
-        # log completion
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
-        
-        # check quota
         api_key = next(
             key for key, value in settings.API_KEYS.items()
             if value['name'] == user_info['name']
@@ -107,9 +110,8 @@ async def ask_question(
             settings.MAX_DAILY_REQUESTS
             - user_quotas.get(api_key, {}).get("count", 0)
         )
-        
         return {
-            "answer": answer, 
+            "answer": answer,
             "user": user_info["name"],
             "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
         }
@@ -130,18 +132,15 @@ async def ask_llm(
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
+        agent.ensure_model_loaded()
         response = agent.model(question)
         answer = extract_answer_from_output(response)
-        
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
-        
-        # check quota
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-        
         return {
-            "answer": answer, 
+            "answer": answer,
             "user": user_info["name"],
             "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
         }
@@ -260,33 +259,34 @@ async def ask_llm_prompted(
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
-        
+
 @router.post("/debug")
 async def debug(
     code: str, 
-    context: bool,
+    context: bool = False,
     user_info: dict = Depends(verify_api_key), 
     request: Request = None
 ):
-    """Process python code for debugging"""
+    """Process python code for debugging using lightweight sandboxed execution"""
     start_time = time.time()
     
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     
     try:
-        response = agent.debug(code, context)
-        answer = response
+        from app.routes.debug import debug_code
+        result = debug_code(code)
         
         process_time = time.time() - start_time
-        logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
+        logger.info(f"RESPONSE - /debug - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
         # check quota
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
         
         return {
-            "answer": answer, 
+            "answer": result["answer"],
+            "status": result.get("status"),
             "user": user_info["name"],
             "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
         }
@@ -319,10 +319,18 @@ async def change_model(
         logger.warning(f"Invalid password for model change by: {user_info['name']} from {client_ip}")
         raise HTTPException(status_code=403, detail="Invalid model change password")
     
+    # Validate model name
+    if model not in settings.AVAILABLE_MODELS:
+        logger.warning(f"Invalid model name '{model}' attempted by {user_info['name']} from {client_ip}")
+        return {"success": False, "error": "Invalid model name", "available_models": settings.AVAILABLE_MODELS}
+
     try:
-        agent.set_model(model)
+        from app.ai import ModelManager
+        model_obj, tokenizer = ModelManager.get_model(model)
+        agent.model = model_obj
+        agent.tokenizer = tokenizer
         logger.info(f"Model changed to {model} by {user_info['name']}")
-        return {"message": f"Model changed to {model}", "user": user_info["name"]}
+        return {"success": True, "message": f"Model changed to {model}", "user": user_info["name"]}
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+        return {"success": False, "error": f"Error changing model: {str(e)}"}
