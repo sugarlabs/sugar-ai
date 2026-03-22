@@ -37,13 +37,21 @@ def extract_answer_from_output(outputs):
         return ""
 
     if "Child-friendly answer:" in generated_text:
-        return generated_text.split("Child-friendly answer:")[-1].strip()
+        answer = generated_text.split("Child-friendly answer:")[-1].strip()
+    elif "Answer:" in generated_text:
+        answer = generated_text.split("Answer:")[-1].strip()
+    else:
+        answer = generated_text.strip()
 
-    if "Answer:" in generated_text:
-        return generated_text.split("Answer:")[-1].strip()
+    # Truncate at the first double newline to prevent the model from
+    # generating runaway content (fabricated Q&A pairs, off-topic text)
+    # beyond the intended answer. Consistent with run_with_custom_prompt.
+    if "\n\n" in answer:
+        candidate = answer.split("\n\n", 1)[0].strip()
+        if len(candidate) > 10:
+            answer = candidate
 
-    # Fallback: return the full generated text trimmed.
-    return generated_text.strip()
+    return answer
 
 
 class RAGAgent:
@@ -112,6 +120,7 @@ class RAGAgent:
 
             self.simplify_model = self.model
 
+        self.vectorstore: Optional[FAISS] = None
         self.retriever: Optional[FAISS] = None
         self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
         self.child_prompt = ChatPromptTemplate.from_template(prompts.CHILD_FRIENDLY_PROMPT)
@@ -150,17 +159,24 @@ class RAGAgent:
         )
         
         vector_store = FAISS.from_documents(all_documents, embeddings)
+        self.vectorstore = vector_store
         self.retriever = vector_store.as_retriever()
         return self.retriever
 
     def get_relevant_document(self, query: str, threshold: float = 0.5):
-        """Get the most relevant document for a query"""
-        results = self.retriever.invoke(query)
+        """Get the most relevant document for a query.
+
+        Uses similarity_search_with_relevance_scores so that the score is
+        a normalized [0, 1] relevance value. FAISS.as_retriever() does not
+        populate a 'score' key in document metadata, so the previous
+        metadata.get("score", 0.0) always returned 0.0, causing every
+        query to fall through to the no-context branch.
+        """
+        results = self.vectorstore.similarity_search_with_relevance_scores(query, k=1)
         if results:
-            top_result = results[0]
-            score = top_result.metadata.get("score", 0.0)
+            doc, score = results[0]
             if score >= threshold:
-                return top_result, score
+                return doc, score
         return None, 0.0
     
     def debug(self, code: str, context: bool) -> str:
