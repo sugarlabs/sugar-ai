@@ -17,8 +17,15 @@ from app.config import settings
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
-    role: str  # "system", "user", "assistant" 
+    role: str  # "system", "user", "assistant"
     content: str
+
+
+class DebugRequest(BaseModel):
+    """Request model for /debug endpoint"""
+    code: str = Field(..., min_length=1, description="Python code to debug or explain")
+    context: bool = Field(False, description="False: debug suggestions, True: explain what the code does")
+
 
 class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
@@ -263,34 +270,34 @@ async def ask_llm_prompted(
         
 @router.post("/debug")
 async def debug(
-    code: str, 
-    context: bool,
-    user_info: dict = Depends(verify_api_key), 
-    request: Request = None
+    request_data: DebugRequest,
+    user_info: dict = Depends(verify_api_key),
+    request: Request = None,
 ):
-    """Process python code for debugging"""
+    """Process python code for debugging or intent explanation"""
     start_time = time.time()
-    
+
     client_ip = request.client.host if request else "unknown"
-    logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
-    
+    logger.info(
+        f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} "
+        f"- context: {request_data.context} - code: {request_data.code[:50]}..."
+    )
+
     try:
-        response = agent.debug(code, context)
-        answer = response
-        
+        answer = agent.debug(request_data.code, request_data.context)
+
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
-        
-        # check quota
-        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
+
+        api_key = next(key for key, value in settings.API_KEYS.items() if value["name"] == user_info["name"])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-        
+
         return {
-            "answer": answer, 
+            "answer": answer,
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
         }
-        
+
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
