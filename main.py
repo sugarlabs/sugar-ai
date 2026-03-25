@@ -23,12 +23,12 @@ import logging
 from sqlalchemy.orm import Session
 import os
 
-from app import create_app
-from app.ai import RAGAgent
-from app.database import get_db
-from app.auth import sync_env_keys_to_db
-from app.config import settings
-from app.routes import api
+from sugar_ai import create_app
+from sugar_ai.ai import RAGAgent
+from sugar_ai.database import get_db
+from sugar_ai.auth import sync_env_keys_to_db
+from sugar_ai.config import settings
+from sugar_ai.routes import api
 
 # setup logging
 logger = logging.getLogger("sugar-ai")

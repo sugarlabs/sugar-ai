@@ -9,8 +9,8 @@ from fastapi.templating import Jinja2Templates
 import os
 import logging
 
-from app.auth import setup_oauth
-from app.database import create_tables
+from sugar_ai.auth import setup_oauth
+from sugar_ai.database import create_tables
 
 # setup logging
 logging.basicConfig(
@@ -52,11 +52,11 @@ def create_app() -> FastAPI:
         logger.warning(f"Static directory '{static_dir}' does not exist")
     
     # register routers
-    from app.routes.api import router as api_router
-    from app.routes.admin import router as admin_router
-    from app.routes.auth import router as auth_router
-    from app.routes.web import router as web_router
-    from app.routes.webhook import router as webhook_router
+    from sugar_ai.routes.api import router as api_router
+    from sugar_ai.routes.admin import router as admin_router
+    from sugar_ai.routes.auth import router as auth_router
+    from sugar_ai.routes.web import router as web_router
+    from sugar_ai.routes.webhook import router as webhook_router
     
     app.include_router(api_router)
     app.include_router(admin_router)

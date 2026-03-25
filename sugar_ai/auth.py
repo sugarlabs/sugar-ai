@@ -16,7 +16,7 @@ from authlib.integrations.starlette_client import OAuth
 from starlette.responses import RedirectResponse
 from dotenv import load_dotenv
 
-from app.database import APIKey, get_db
+from sugar_ai.database import APIKey, get_db
 
 # load environment variables
 load_dotenv()

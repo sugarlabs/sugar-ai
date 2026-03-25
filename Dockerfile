@@ -39,7 +39,7 @@ COPY *.py ./
 COPY templates/ ./templates/
 COPY static/ ./static/
 COPY docs/ ./docs/
-COPY app/ ./app/
+COPY sugar_ai/ ./sugar_ai/
 COPY .env* ./
 RUN mkdir -p /app/data
 EXPOSE 8000

@@ -7,9 +7,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import logging
 
-from app.database import get_db, APIKey
-from app.auth import oauth, generate_api_key
-from app.config import settings
+from sugar_ai.database import get_db, APIKey
+from sugar_ai.auth import oauth, generate_api_key
+from sugar_ai.config import settings
 
 router = APIRouter(tags=["auth"])
 

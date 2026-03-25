@@ -11,9 +11,10 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, List
 
-from app.database import get_db, APIKey
-from app.ai import RAGAgent, extract_answer_from_output
-from app.config import settings
+from sugar_ai.database import get_db, APIKey
+from sugar_ai.ai import RAGAgent, extract_answer_from_output
+from sugar_ai.config import settings
+from sugar_ai.core.model_router import run_model
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -22,6 +23,8 @@ class ChatMessage(BaseModel):
 
 class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
+    provider: str = Field(settings.DEFAULT_PROVIDER, description="AI provider (openai, huggingface, local)")
+    model: Optional[str] = Field(settings.DEFAULT_MODEL, description="Model name to use")
     chat: bool = Field(False, description="Enable chat mode (uses messages instead of question)")
     question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
     custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
@@ -130,8 +133,15 @@ async def ask_llm(
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        response = agent.model(question)
-        answer = extract_answer_from_output(response)
+        config = {"model": settings.DEFAULT_MODEL}
+        response = run_model(question, provider=settings.DEFAULT_PROVIDER, config=config)
+        
+        if isinstance(response, dict) and "response" in response:
+            answer = response["response"]
+        elif isinstance(response, dict) and "error" in response:
+            raise Exception(response["error"])
+        else:
+            answer = str(response)
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
