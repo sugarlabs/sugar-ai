@@ -119,14 +119,19 @@ def generate_api_key() -> str:
     """Generate a secure random API key"""
     return secrets.token_urlsafe(32)
 
-def sync_env_keys_to_db(db: Session):
-    """Initial migration of keys from .env file to database"""
+def sync_and_load_keys(db: Session):
+    """
+    1. Sync new keys from .env file to database.
+    2. Load all approved and active keys from database into memory (settings.API_KEYS).
+    """
+    from sugar_ai.config import settings
+    
+    # Phase 1: Sync from .env to DB
     try:
         api_keys_str = os.getenv("API_KEYS", "{}")
         api_keys = json.loads(api_keys_str)
         
         for key, data in api_keys.items():
-            # check if key already exists in db
             existing = db.query(APIKey).filter(APIKey.key == key).first()
             if not existing:
                 db_key = APIKey(
@@ -135,10 +140,28 @@ def sync_env_keys_to_db(db: Session):
                     can_change_model=data.get("can_change_model", False),
                     is_active=True,
                     approved=True,
-                    email="migrated@example.com"  # placeholder for migrated keys
+                    email="migrated_from_env@example.com"
                 )
                 db.add(db_key)
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Error syncing keys: {e}")
+        logger.error(f"Error syncing .env keys: {e}")
+
+    # Phase 2: Load from DB to Memory (settings.API_KEYS)
+    try:
+        all_approved = db.query(APIKey).filter(
+            APIKey.approved == True,
+            APIKey.is_active == True
+        ).all()
+        
+        # Hydrate settings.API_KEYS - this is the source of truth for the API validator
+        for key_obj in all_approved:
+            settings.API_KEYS[key_obj.key] = {
+                "name": key_obj.name,
+                "can_change_model": key_obj.can_change_model
+            }
+        
+        logger.info(f"Successfully reloaded {len(all_approved)} API keys from database.")
+    except Exception as e:
+        logger.error(f"Error loading keys into memory: {e}")

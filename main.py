@@ -26,7 +26,7 @@ import os
 from sugar_ai import create_app
 from sugar_ai.ai import RAGAgent
 from sugar_ai.database import get_db
-from sugar_ai.auth import sync_env_keys_to_db
+from sugar_ai.auth import sync_and_load_keys
 from sugar_ai.config import settings
 from sugar_ai.routes import api
 
@@ -37,9 +37,9 @@ app = create_app()
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize data on app startup"""
+    """Initialize data and sync keys on app startup"""
     db = next(get_db())
-    sync_env_keys_to_db(db)
+    sync_and_load_keys(db)
     if settings.DEV_MODE:
         active_model = settings.DEV_MODEL_NAME
         logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
