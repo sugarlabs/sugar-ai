@@ -2,8 +2,7 @@
 Database models and connection handling for Sugar-AI.
 """
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import datetime
 from typing import Dict, Any, Generator
 
