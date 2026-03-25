@@ -82,9 +82,30 @@ print(response["response"])
 ```
 
 ### Configuration
-The system is driven by a centralized config in `sugar_ai/config/settings.py`. You can override the default provider and model via environment variables:
-- `DEFAULT_PROVIDER`: "openai", "huggingface", or "local"
-- `DEFAULT_MODEL`: The specific model ID (e.g., "gpt-3.5-turbo" or "Qwen/Qwen2-1.5B-Instruct")
+The system is driven by a centralized config in `sugar_ai/config/settings.py`. You can override the default provider and model via environment variables in your `.env` file.
+
+#### Environment Variables & Provider Setup
+To switch between different AI providers without changing code, update your `.env` file:
+
+```env
+# Choose your default provider: openai, huggingface, or local
+DEFAULT_PROVIDER=openai
+
+# Set the specific model for the provider
+DEFAULT_MODEL=gpt-3.5-turbo
+
+# For OpenAI provider:
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEFAULT_PROVIDER` | The active AI engine | `openai` |
+| `DEFAULT_MODEL` | The model ID to use | `gpt-3.5-turbo` |
+| `OPENAI_API_KEY` | Required for OpenAI | - |
+
+> [!TIP]
+> Use `DEFAULT_PROVIDER=local` for zero-cost development or testing model-agnostic code.
 
 ## Test API endpoints
 

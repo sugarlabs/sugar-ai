@@ -95,7 +95,7 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        answer = agent.run(question)
+        answer = await agent.run(question)
         
         # log completion
         process_time = time.time() - start_time
@@ -134,7 +134,7 @@ async def ask_llm(
     
     try:
         config = {"model": settings.DEFAULT_MODEL}
-        response = run_model(question, provider=settings.DEFAULT_PROVIDER, config=config)
+        response = await run_model(question, provider=settings.DEFAULT_PROVIDER, config=config)
         
         if isinstance(response, dict) and "response" in response:
             answer = response["response"]
@@ -195,7 +195,7 @@ async def ask_llm_prompted(
             messages_dict = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
             
             # Call the agent's chat completion function
-            answer = agent.run_chat_completion(
+            answer = await agent.run_chat_completion(
                 messages=messages_dict,
                 max_length=request_data.max_length,
                 truncation=request_data.truncation,
@@ -237,7 +237,7 @@ async def ask_llm_prompted(
             logger.info(f"REQUEST - /ask-llm-prompted - User: {user_info['name']} - IP: {client_ip} - Question: {request_data.question[:200]}...")
             logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
             
-            answer = agent.run_with_custom_prompt(
+            answer = await agent.run_with_custom_prompt(
                 question=request_data.question,
                 custom_prompt=request_data.custom_prompt,
                 max_length=request_data.max_length,
@@ -285,7 +285,7 @@ async def debug(
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     
     try:
-        response = agent.debug(code, context)
+        response = await agent.debug(code, context)
         answer = response
         
         process_time = time.time() - start_time

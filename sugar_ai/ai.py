@@ -174,33 +174,33 @@ class RAGAgent:
                 return top_result, score
         return None, 0.0
     
-    def debug(self, code: str, context: bool) -> str:
+    async def debug(self, code: str, context: bool) -> str:
         """
-        Debugging logic using the modular router.
+        Debugging logic using the modular router (asynchronous).
         """
         config = {"model": self.model_name}
         
         if context:
             # Contextualization
             prompt1 = prompts.CODE_CONTEXT_PROMPT.format(code=code)
-            res1 = run_model(prompt1, provider=self.provider, config=config)
+            res1 = await run_model(prompt1, provider=self.provider, config=config)
             context_output = res1.get("response") if isinstance(res1, dict) else str(res1)
             
             prompt2 = prompts.KIDS_CONTEXT_PROMPT.format(context_output=context_output)
-            res2 = run_model(prompt2, provider=self.provider, config=config)
+            res2 = await run_model(prompt2, provider=self.provider, config=config)
             return res2.get("response") if isinstance(res2, dict) else str(res2)
         
         # Debugging
         prompt1 = prompts.CODE_DEBUG_PROMPT.format(code=code)
-        res1 = run_model(prompt1, provider=self.provider, config=config)
+        res1 = await run_model(prompt1, provider=self.provider, config=config)
         debug_output = res1.get("response") if isinstance(res1, dict) else str(res1)
         
         prompt2 = prompts.KIDS_DEBUG_PROMPT.format(debug_output=debug_output)
-        res2 = run_model(prompt2, provider=self.provider, config=config)
+        res2 = await run_model(prompt2, provider=self.provider, config=config)
         return res2.get("response") if isinstance(res2, dict) else str(res2)
 
-    def run(self, question: str) -> str:
-        """Process a question through the RAG pipeline using the modular router"""
+    async def run(self, question: str) -> str:
+        """Process a question through the RAG pipeline using the modular router (asynchronous)"""
         # Retrieval
         doc_result, _ = self.get_relevant_document(question)
         context = doc_result.page_content if doc_result else "No context available."
@@ -208,26 +208,24 @@ class RAGAgent:
         config = {"model": self.model_name}
         
         # Step 1: Initial Answer
-        # Note: Since the original template didn't have {context}, we'll stick to what the router supports
-        # or update the prompt here.
         full_question = f"Context: {context}\n\nQuestion: {question}"
-        res1 = run_model(full_question, provider=self.provider, config=config)
+        res1 = await run_model(full_question, provider=self.provider, config=config)
         first_response = res1.get("response") if isinstance(res1, dict) else str(res1)
         
         # Step 2: Make child-friendly
         child_prompt = prompts.CHILD_FRIENDLY_PROMPT.format(original_answer=first_response)
-        res2 = run_model(child_prompt, provider=self.provider, config=config)
+        res2 = await run_model(child_prompt, provider=self.provider, config=config)
         final_response = res2.get("response") if isinstance(res2, dict) else str(res2)
         
         return final_response
 
-    def run_with_custom_prompt(self, question: str, custom_prompt: str, 
-                             **kwargs) -> str:
-        """Process a question with custom prompt using the router"""
+    async def run_with_custom_prompt(self, question: str, custom_prompt: str, 
+                                   **kwargs) -> str:
+        """Process a question with custom prompt using the router (asynchronous)"""
         full_prompt = f"{custom_prompt}\n\nQuestion: {question}\nAnswer:"
         
         config = {"model": self.model_name, **kwargs}
-        res = run_model(full_prompt, provider=self.provider, config=config)
+        res = await run_model(full_prompt, provider=self.provider, config=config)
         return res.get("response") if isinstance(res, dict) else str(res)
 
     def _normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
@@ -299,16 +297,16 @@ class RAGAgent:
         return answer
 
 
-    def run_chat_completion(self, messages: list, **kwargs) -> str:
+    async def run_chat_completion(self, messages: list, **kwargs) -> str:
         """
-        Process chat messages with chat format and generation parameters using the router.
+        Process chat messages with chat format and generation parameters using the router (asynchronous).
         """
         if self.provider == "openai":
             last_msg = messages[-1]["content"] if messages else ""
-            res = run_model(last_msg, provider=self.provider, config={"model": self.model_name, **kwargs})
+            res = await run_model(last_msg, provider=self.provider, config={"model": self.model_name, **kwargs})
             return res.get("response") if isinstance(res, dict) else str(res)
         else:
             # Fallback for local/hf: combine messages
             combined = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
-            res = run_model(combined, provider=self.provider, config={"model": self.model_name, **kwargs})
+            res = await run_model(combined, provider=self.provider, config={"model": self.model_name, **kwargs})
             return res.get("response") if isinstance(res, dict) else str(res)

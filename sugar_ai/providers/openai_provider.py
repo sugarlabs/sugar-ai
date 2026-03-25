@@ -1,6 +1,6 @@
-def run_openai(input_text, config):
+async def run_openai(input_text, config):
     """
-    OpenAI provider implementation.
+    OpenAI provider implementation (asynchronous).
     Requires OPENAI_API_KEY to be set in environment.
     """
     import openai
@@ -11,10 +11,10 @@ def run_openai(input_text, config):
     if not api_key:
         return {"error": "OPENAI_API_KEY not found in environment"}
         
-    client = openai.OpenAI(api_key=api_key)
+    client = openai.AsyncOpenAI(api_key=api_key)
     
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=config.get("model", "gpt-3.5-turbo"),
             messages=[{"role": "user", "content": input_text}]
         )
