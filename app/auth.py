@@ -51,10 +51,13 @@ API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def setup_oauth(app):
     """Configure the FastAPI app with OAuth and session middleware"""
-    app.add_middleware(
-        SessionMiddleware, 
-        secret_key=os.getenv("SESSION_SECRET_KEY", "supersecretkey")
-    )
+    secret_key = os.getenv("SESSION_SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError(
+            "SESSION_SECRET_KEY environment variable is not set. "
+            "Please set a strong random secret in your .env file before starting the app."
+        )
+    app.add_middleware(SessionMiddleware, secret_key=secret_key)
     return app
 
 async def get_oauth_user_info(request: Request) -> Optional[Dict[str, Any]]:
