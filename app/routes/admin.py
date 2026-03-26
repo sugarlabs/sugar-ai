@@ -31,13 +31,13 @@ async def admin_panel(
     denied_keys = db.query(APIKey).filter(APIKey.approved == False, APIKey.is_active == True).all()
     
     return templates.TemplateResponse(
-        "admin_panel.html", 
+        request,
+        "admin_panel.html",
         {
-            "request": request,
             "pending_keys": pending_keys,
             "approved_keys": approved_keys,
-            "denied_keys": denied_keys
-        }
+            "denied_keys": denied_keys,
+        },
     )
 
 @router.post("/admin/approve/{key_id}")
