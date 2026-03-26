@@ -51,7 +51,13 @@ mode that uses a lightweight, CPU-friendly model.
 ### Enable DEV_MODE
 
 ```bash
-DEV_MODE=1 python main.py
+DEV_MODE=true python main.py
+```
+
+Or set it in `.env`:
+
+```env
+DEV_MODE=true
 ```
 
 

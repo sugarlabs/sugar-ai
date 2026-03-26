@@ -1,7 +1,6 @@
 """
 Configuration settings for Sugar-AI.
 """
-import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Dict, List, Any, Optional
@@ -9,8 +8,10 @@ from typing import Dict, List, Any, Optional
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
+    model_config = SettingsConfigDict(env_file=".env", extra="allow")
+
     # Dev mode (THIS MUST EXIST)
-    DEV_MODE: bool = os.getenv("DEV_MODE", "0") == "1"
+    DEV_MODE: bool = False
     DEV_MODEL_NAME: str | None = None
     PROD_MODEL_NAME: str | None = None
     DEFAULT_MODEL: str | None = None
@@ -33,8 +34,4 @@ class Settings(BaseSettings):
     # application settings
     TEMPLATES_DIR: str = "templates"
     
-    class Config:
-        env_file = ".env"
-        extra = "allow"  # this allows extra attribute if we have any
-
 settings = Settings()
