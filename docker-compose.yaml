@@ -1,10 +1,67 @@
 name: sugar-ai
-version: '3.8'
 services:
   sugar-ai:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////app/volume/sugar_ai.db
     ports:
-      - "443:8000"
-    command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+      - "8000:8000"
+    volumes:
+      - ./volume:/app/volume
+    networks:
+      - llm
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["vllm"]
+    ports:
+      - "8001:8000"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    command:
+      - --model
+      - ${VLLM_MODEL_NAME:-Qwen/Qwen2-1.5B-Instruct}
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-4096}
+    networks:
+      - llm
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    networks:
+      - llm
+  ollama-pull:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ollama:/root/.ollama
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - |
+        for i in $(seq 1 60); do
+          ollama list >/dev/null 2>&1 && break
+          sleep 2
+        done
+        ollama pull ${OLLAMA_PULL_MODEL:-qwen2.5:1.5b}
+    networks:
+      - llm
+volumes:
+  ollama:
+networks:
+  llm:
+    name: sugar-ai-llm

@@ -2,70 +2,151 @@
 
 This document describes how to run Sugar-AI, test recent changes, and troubleshoot common issues.
 
-## Running Sugar-AI with Docker
+## Running Sugar-AI
 
-Sugar-AI provides a Docker-based deployment option for an isolated and reproducible environment.
-
-### Build the Docker image
-
-Open your terminal in the project's root directory and run:
-
-```sh
-docker build -t sugar-ai .
-```
-
-### Run the Docker container
-
-- **With GPU (using NVIDIA Docker runtime):**
-
-    ```sh
-    docker run --gpus all -it --rm sugar-ai
-    ```
-
-- **CPU-only:**
-
-    ```sh
-    docker run -it --rm sugar-ai
-    ```
-
-The container starts by executing `main.py`. To change the startup behavior, update the Dockerfile accordingly.
-
-## Testing the FastAPI App
-
-The FastAPI server provides endpoints to interact with Sugar-AI.
+Sugar-AI now expects an OpenAI-compatible LLM service. The app is decoupled from model serving: `docker compose up` starts only Sugar-AI, while optional Compose profiles can start bundled model backends on the shared `sugar-ai-llm` Docker network.
 
 ### Install dependencies
 
 ```sh
 pip install -r requirements.txt
 ```
-## Local Development (DEV_MODE)
 
-By default, Sugar-AI loads large language models intended for production use.
-These models may require significant memory and can cause startup failures
-on low-memory contributor machines.
+### Configure the initial LLM connection
 
-To improve the local development experience, Sugar-AI provides a development
-mode that uses a lightweight, CPU-friendly model.
-
-### Enable DEV_MODE
-
-```bash
-DEV_MODE=true python main.py
-```
-
-Or set it in `.env`:
+Set the application seed configuration in `.env`:
 
 ```env
-DEV_MODE=true
+LLM_PROVIDER_TYPE=openai_compatible
+LLM_BASE_URL=http://ollama:11434/v1
+LLM_API_KEY=ollama
+LLM_MODEL_NAME=qwen2.5:1.5b
+LLM_MAX_MODEL_LENGTH=4096
+LLM_DISPLAY_NAME=Default Ollama Qwen
 ```
 
+This example targets the bundled Ollama service on the Compose network. If you are connecting to your own deployed or hosted OpenAI-compatible service, replace `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL_NAME` with values that are reachable from the `sugar-ai` container before the first startup.
 
-### Run the server
+On first startup, Sugar-AI seeds one active model record from these values if the database does not already contain an active LLM configuration.
+After the `llm_models` table has been initialized, the database becomes the source of truth and later changes to these environment variables do not override the saved model records.
+
+### Docker database persistence
+
+When running through `docker compose`, Sugar-AI now stores SQLite data in a bind-mounted host directory:
+
+- container path: `/app/volume/sugar_ai.db`
+- host path: `./volume/sugar_ai.db`
+
+This path is configured through `DATABASE_URL=sqlite:////app/volume/sugar_ai.db` in `docker-compose.yaml`.
+If you run the app directly with local Python instead of Docker, the code still falls back to the default relative SQLite path unless you explicitly set `DATABASE_URL` yourself.
+
+If you already have data in an existing container created before this change, it will not move automatically into the new bind-mounted directory. To keep your existing data, copy it out once before recreating the stack:
 
 ```sh
-uvicorn main:app --host 0.0.0.0 --port 8000
+mkdir -p volume
+docker compose cp sugar-ai:/app/sugar_ai.db ./volume/sugar_ai.db
+docker compose up --build
 ```
+
+After the container is recreated, the app will read and write `./volume/sugar_ai.db` on the host while using `/app/volume/sugar_ai.db` inside the container.
+
+### Legacy model config migration
+
+Older Sugar-AI versions could boot from these environment variables:
+
+- `DEV_MODEL_NAME`
+- `PROD_MODEL_NAME`
+- `DEFAULT_MODEL`
+
+The current version no longer starts from those keys. On a fresh database, you must configure the OpenAI-compatible seed model with at least:
+
+```env
+LLM_BASE_URL=http://ollama:11434/v1
+LLM_MODEL_NAME=qwen2.5:1.5b
+```
+
+If the app finds only the legacy model keys during first startup, it now stops with a migration error instead of guessing how to map the old configuration to a provider endpoint.
+
+### Start only the app
+
+Start Sugar-AI without any bundled model service:
+
+```sh
+docker compose up --build
+```
+
+This starts:
+- `sugar-ai` on port `8000`
+- a reusable Docker network named `sugar-ai-llm`
+
+Before using this mode, make sure `.env` points at an external or self-hosted OpenAI-compatible service that is reachable from the `sugar-ai` container. If your model service is not managed by this Compose file, make sure it can reach or join `sugar-ai-llm`, then create or activate the matching model record from `/admin/models`.
+
+### Run the full stack with Ollama
+
+The example `.env` above already points to the bundled Ollama service:
+
+```env
+OLLAMA_PULL_MODEL=qwen2.5:1.5b
+```
+
+Then start the app and Ollama together:
+
+```sh
+docker compose --profile ollama up --build
+```
+
+This starts:
+- `sugar-ai` on port `8000`
+- `ollama` on port `11434`
+
+The `ollama-pull` helper service downloads `OLLAMA_PULL_MODEL` on first run. Keep `LLM_MODEL_NAME` and `OLLAMA_PULL_MODEL` aligned unless you intentionally manage models yourself inside Ollama.
+
+### Run the full stack with vLLM
+
+If you want the first bootstrap model to point at the bundled vLLM service, update `.env` before the first startup:
+
+```env
+LLM_BASE_URL=http://vllm:8000/v1
+LLM_API_KEY=not-needed
+LLM_MODEL_NAME=Qwen/Qwen2-1.5B-Instruct
+LLM_DISPLAY_NAME=Default vLLM Model
+```
+
+Then start the app and vLLM together:
+
+```sh
+docker compose --profile vllm up --build
+```
+
+This starts:
+- `sugar-ai` on port `8000`
+- `vllm` on port `8001`
+
+The bundled `vllm` service is intentionally minimal and is meant for straightforward local GPU setups. If you have more complex requirements such as CPU serving, multi-GPU tensor parallelism, custom memory limits, quantization, or model-specific launch flags, update the `vllm` service parameters in `docker-compose.yaml` to match your environment.
+
+### Run the app against an external OpenAI-compatible service
+
+If you already have a provider running elsewhere, point `.env` to a URL that is reachable from the `sugar-ai` container and start only the app:
+
+```sh
+docker compose up --build
+```
+
+Examples:
+
+```env
+LLM_BASE_URL=http://host.docker.internal:8001/v1
+```
+
+or start your own model container on the same shared network:
+
+```sh
+docker run --rm --network sugar-ai-llm ...
+```
+
+## Testing the FastAPI App
+
+The FastAPI server provides endpoints to interact with Sugar-AI.
 
 ### Test API endpoints
 
@@ -141,10 +222,8 @@ Sugar-AI provides three different endpoints for different use cases:
         "custom_prompt": "You are a coding tutor. Explain step-by-step with comments.",
         "max_length": 1024,
         "truncation": true,
-        "repetition_penalty": 1.1,
         "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 50
+        "top_p": 0.9
       }'
     ```
 
@@ -169,8 +248,7 @@ Sugar-AI provides three different endpoints for different use cases:
         ],
         "max_length": 512,
         "temperature": 0.6,
-        "top_p": 0.9,
-        "top_k": 50
+        "top_p": 0.9
       }'
     ```
     - Send chat history with roles `system`, `user`, and `assistant`.
@@ -183,10 +261,8 @@ Sugar-AI provides three different endpoints for different use cases:
     - `messages` (required when `chat=true`): Array of `{role, content}` messages where role is one of `system`, `user`, `assistant`
     - `max_length` (optional, default: 1024): Maximum length of generated response
     - `truncation` (optional, default: true): Whether to truncate long inputs
-    - `repetition_penalty` (optional, default: 1.1): Controls repetition (1.0 = no penalty, >1.0 = less repetition)
     - `temperature` (optional, default: 0.7): Controls randomness (0.0 = deterministic, 1.0 = very random)
     - `top_p` (optional, default: 0.9): Nucleus sampling (0.1 = focused, 0.9 = diverse)
-    - `top_k` (optional, default: 50): Limits vocabulary to K most likely words
 
     **Response Format (Prompted mode):**
     ```json
@@ -197,10 +273,8 @@ Sugar-AI provides three different endpoints for different use cases:
       "generation_params": {
         "max_length": 1024,
         "truncation": true,
-        "repetition_penalty": 1.1,
         "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 50
+        "top_p": 0.9
       }
     }
     ```
@@ -223,10 +297,8 @@ Sugar-AI provides three different endpoints for different use cases:
       "generation_params": {
         "max_length": 512,
         "truncation": true,
-        "repetition_penalty": 1.1,
         "temperature": 0.6,
-        "top_p": 0.9,
-        "top_k": 50
+        "top_p": 0.9
       }
     }
     ```
@@ -243,9 +315,9 @@ Sugar-AI provides three different endpoints for different use cases:
     Chat Mode: They can also use the chat mode to give context of chat history to the LLM better suited for conversational style features.
 
     **Generation Parameter Guidelines:**
-    - **For Code**: `temperature: 0.2-0.4, top_p: 0.8, repetition_penalty: 1.1`
-    - **For Creative Content**: `temperature: 0.7-0.9, top_p: 0.9, repetition_penalty: 1.2`
-    - **For Factual Answers**: `temperature: 0.3-0.5, top_p: 0.7, repetition_penalty: 1.0`
+    - **For Code**: `temperature: 0.2-0.4, top_p: 0.8`
+    - **For Creative Content**: `temperature: 0.7-0.9, top_p: 0.9`
+    - **For Factual Answers**: `temperature: 0.3-0.5, top_p: 0.7`
 
 ### API Authentication
 
@@ -283,10 +355,56 @@ The response will include the user name:
 
 #### Changing Models (Admin Only)
 
-Users with `can_change_model: true` permission can change the model:
+Users with `can_change_model: true` permission can switch the active model record:
 
 ```sh
-curl -X POST "http://localhost:8000/change-model?model=Qwen/Qwen2-1.5B-Instruct&api_key=sugarai2024&password=sugarai2024"
+curl -X POST "http://localhost:8000/change-model?model_id=1&api_key=sugarai2024&password=sugarai2024"
+```
+
+#### Managing Model Records (Admin Only)
+
+List models:
+
+```sh
+curl -X GET "http://localhost:8000/admin/models" \
+  -H "X-API-Key: sugarai2024"
+```
+
+Create a model record:
+
+```sh
+curl -X POST "http://localhost:8000/admin/models" \
+  -H "X-API-Key: sugarai2024" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Backup vLLM",
+    "provider_type": "openai_compatible",
+    "base_url": "http://localhost:8002/v1",
+    "api_key": "not-needed",
+    "model_name": "Qwen/Qwen2-1.5B-Instruct",
+    "max_model_length": 4096,
+    "is_active": false
+  }'
+```
+
+#### API Smoke Test Script
+
+An executable smoke test script is available at `scripts/test_api.py`.
+
+Run it against a live server:
+
+```sh
+APP_BASE_URL=http://localhost:8000 \
+TEST_API_KEY=user_key_1 \
+ADMIN_API_KEY=sugarai2024 \
+MODEL_CHANGE_PASSWORD=sugarai2024 \
+python3 scripts/test_api.py
+```
+
+For repository-only verification without a live LLM service, use the internal mode:
+
+```sh
+python3 scripts/test_api.py --internal
 ```
 
 #### Why User Names Are Useful
@@ -399,20 +517,16 @@ if endpoint_choice == "Custom Prompt (ask-llm-prompted)":
         with col1:
             max_length = st.number_input("Max Length", value=1024, min_value=100, max_value=2048)
             temperature = st.slider("Temperature", 0.0, 1.0, 0.7, 0.1)
-            repetition_penalty = st.slider("Repetition Penalty", 0.5, 2.0, 1.1, 0.1)
         
         with col2:
             top_p = st.slider("Top P", 0.1, 1.0, 0.9, 0.1)
-            top_k = st.number_input("Top K", value=50, min_value=1, max_value=100)
             truncation = st.checkbox("Truncation", value=True)
     
     generation_params = {
         "max_length": max_length,
         "truncation": truncation,
-        "repetition_penalty": repetition_penalty,
         "temperature": temperature,
-        "top_p": top_p,
-        "top_k": top_k
+        "top_p": top_p
     }
 
 if st.button("Submit"):

@@ -25,6 +25,9 @@ logger = logging.getLogger("sugar-ai")
 
 def create_app() -> FastAPI:
     app = FastAPI()
+    app.state.settings = None
+    app.state.agent = None
+    app.state.startup_error = None
     
     # apply middlewares
     app = setup_oauth(app)

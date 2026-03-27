@@ -1,77 +1,53 @@
-/* admin panel styles */
 body {
   font-family: Arial, sans-serif;
   line-height: 1.6;
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  color: #111;
+  background: #fff;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
+h1 {
+  margin: 0;
 }
 
-table, th, td {
-  border: 1px solid #ddd;
+h2 {
+  margin: 0 0 8px;
 }
 
-th, td {
-  padding: 12px;
-  text-align: left;
+.eyebrow {
+  margin: 0 0 4px;
+  color: #666;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-th {
-  background-color: #f2f2f2;
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-tr:nth-child(even) {
-  background-color: #f9f9f9;
+.logout-container {
+  text-align: right;
 }
 
-.action-btn {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin: 3px;
-  font-weight: bold;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
-  min-width: 100px;
-  display: inline-block;
-  text-align: center;
-}
-
-.action-btn:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
-}
-
-.approve {
-  background-color: #4caf50;
-  color: white;
-}
-
-.deny {
+.logout-btn {
   background-color: #f44336;
   color: white;
-}
-
-.toggle-admin {
-  background-color: #673ab7;
-  color: white;
-}
-
-.toggle-status {
-  background-color: #2196f3;
-  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: 4px;
+  display: inline-block;
 }
 
 .message {
   padding: 10px;
-  margin: 10px 0;
+  margin: 10px 0 16px;
   border-radius: 4px;
 }
 
@@ -98,7 +74,8 @@ tr:nth-child(even) {
   outline: none;
   cursor: pointer;
   padding: 14px 16px;
-  transition: 0.3s;
+  transition: 0.2s;
+  font-weight: 600;
 }
 
 .tabs button:hover {
@@ -111,115 +88,204 @@ tr:nth-child(even) {
 
 .tab-content {
   display: none;
-  padding: 6px 12px;
+  padding: 16px 12px 10px;
   border: 1px solid #ccc;
   border-top: none;
 }
 
-.logout-btn {
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.section-subtitle {
+  margin: 0;
+  color: #555;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+table,
+th,
+td {
+  border: 1px solid #ddd;
+}
+
+th,
+td {
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background-color: #f2f2f2;
+}
+
+tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.action-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 3px;
+  font-weight: 600;
+  min-width: 88px;
+}
+
+.approve,
+.save-model {
+  background-color: #4caf50;
+  color: white;
+}
+
+.deny,
+.delete-model {
   background-color: #f44336;
   color: white;
-  padding: 8px 16px;
-  text-decoration: none;
-  border-radius: 4px;
 }
 
-.logout-container {
-  text-align: right;
-  margin-bottom: 20px;
+.toggle-admin {
+  background-color: #673ab7;
+  color: white;
 }
 
-.usage-summary {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
+.toggle-status,
+.activate-model {
+  background-color: #2196f3;
+  color: white;
 }
 
-.usage-card {
-  background-color: #f5f5f5;
-  border-radius: 8px;
-  padding: 15px;
-  flex: 1;
-  margin: 0 10px;
-  text-align: center;
+.edit-model {
+  background-color: #ff9800;
+  color: white;
 }
 
-.usage-card:first-child {
-  margin-left: 0;
-}
-
-.usage-card:last-child {
-  margin-right: 0;
-}
-
-.usage-number {
-  font-size: 28px;
-  font-weight: bold;
-  color: #333;
-}
-
-.progress-bar {
+.secondary-btn {
   background-color: #e0e0e0;
-  height: 20px;
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-}
-
-.progress {
-  height: 100%;
-  background-color: #4CAF50;
-  transition: width 0.3s ease;
-}
-
-.input-group {
-  display: flex;
-  margin-bottom: 15px;
+  color: #222;
 }
 
 .admin-input {
-  flex: 1;
-  padding: 8px 12px;
+  width: 100%;
+  padding: 10px 12px;
   border: 1px solid #ccc;
-  border-radius: 4px 0 0 4px;
+  border-radius: 4px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
-.input-group .action-btn {
-  border-radius: 0 4px 4px 0;
+.model-dialog {
+  width: min(720px, calc(100vw - 32px));
+  border: none;
+  padding: 0;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+}
+
+.model-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal-dialog {
+  padding: 20px;
+  background: #fff;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
   margin: 0;
 }
 
-#admin-key-form {
-  background-color: #f9f9f9;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f4f4f4;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-#admin-key-form p {
-  margin-top: 0;
+.modal-form {
+  margin: 0;
 }
 
-#admin-key-form small {
-  color: #666;
-  font-style: italic;
+.model-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
 }
 
-.progress.medium {
-  background-color: #FFC107;
+.model-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
 }
 
-.progress.high {
-  background-color: #F44336;
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.progress-bar span {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #333;
-  font-size: 12px;
-  font-weight: bold;
+.model-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.models-table td:last-child {
+  min-width: 220px;
+}
+
+@media (max-width: 860px) {
+  .page-header,
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .model-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .action-btn,
+  .logout-btn {
+    width: 100%;
+  }
+
+  td form,
+  td button {
+    width: 100%;
+  }
+
+  .model-dialog {
+    width: calc(100vw - 20px);
+  }
 }

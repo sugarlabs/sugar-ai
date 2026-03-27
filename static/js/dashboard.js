@@ -19,9 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Parameter elements
     const temperatureInput = document.getElementById('temperature');
     const topPInput = document.getElementById('top-p');
-    const topKInput = document.getElementById('top-k');
     const maxLengthInput = document.getElementById('max-length');
-    const repetitionPenaltyInput = document.getElementById('repetition-penalty');
     const truncationInput = document.getElementById('truncation');
     
     // add a user message to the chat
@@ -119,23 +117,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // handle preset button clicks
     function applyPreset(presetType) {
-        if (!temperatureInput || !topPInput || !repetitionPenaltyInput) return;
+        if (!temperatureInput || !topPInput) return;
         
         switch (presetType) {
             case 'code':
                 temperatureInput.value = '0.3';
                 topPInput.value = '0.8';
-                repetitionPenaltyInput.value = '1.1';
                 break;
             case 'creative':
                 temperatureInput.value = '0.8';
                 topPInput.value = '0.9';
-                repetitionPenaltyInput.value = '1.2';
                 break;
             case 'factual':
                 temperatureInput.value = '0.4';
                 topPInput.value = '0.7';
-                repetitionPenaltyInput.value = '1.0';
                 break;
         }
     }
@@ -167,9 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add generation parameters if they exist
                 if (temperatureInput) requestBody.temperature = parseFloat(temperatureInput.value);
                 if (topPInput) requestBody.top_p = parseFloat(topPInput.value);
-                if (topKInput) requestBody.top_k = parseInt(topKInput.value);
                 if (maxLengthInput) requestBody.max_length = parseInt(maxLengthInput.value);
-                if (repetitionPenaltyInput) requestBody.repetition_penalty = parseFloat(repetitionPenaltyInput.value);
                 if (truncationInput) requestBody.truncation = truncationInput.checked;
                 
                 response = await fetch('/ask-llm-prompted', {
