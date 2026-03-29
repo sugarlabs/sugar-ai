@@ -49,6 +49,8 @@ async def startup_event():
 
     initialized_agent = RAGAgent(model=active_model)
     initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
+    if not initialized_agent.retriever:
+        logger.warning("RAG retriever is unconfigured. /ask will run without document retrieval.")
 
     # Inject this instance into the API module
     # This updates the 'agent = None' in api.py to be the real loaded model

@@ -1,7 +1,9 @@
 """
 Web routes handling HTML responses for Sugar-AI.
 """
-from fastapi import APIRouter, Depends, Request
+import os
+
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -15,10 +17,26 @@ router = APIRouter(tags=["web"])
 # set up templates
 templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 
+
+@router.get("/health", status_code=status.HTTP_200_OK)
+async def health_check():
+    """Return service health and essential LLM configuration status."""
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    local_llm_url = os.getenv("LOCAL_LLM_URL")
+
+    return {
+        "service": "online",
+        "components": {
+            "llm": "configured" if openai_api_key or local_llm_url else "unconfigured",
+            "openai_api_key": "configured" if openai_api_key else "unconfigured",
+            "local_llm_url": "configured" if local_llm_url else "unconfigured",
+        },
+    }
+
 @router.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Render welcome page"""
-    return templates.TemplateResponse("welcome.html", {"request": request})
+    return templates.TemplateResponse(request, "welcome.html", {"request": request})
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, db: Session = Depends(get_db)):
@@ -64,7 +82,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     if user and user.get("can_change_model", False):
         admin_url = "/admin"
     
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse(request, "dashboard.html", {
         "request": request,
         "user": user,
         "api_key": api_key,
