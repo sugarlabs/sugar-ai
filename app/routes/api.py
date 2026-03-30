@@ -340,17 +340,13 @@ async def get_historical_summary(
     """
     start_time = time.time()
     client_ip = request.client.host if request else "unknown"
-    logger.info(f"REQUEST - /history/summary/{activity_id} - User: {user_info['name']} - IP: {client_ip}")
-
-    # Mock reflection data (to be replaced by actual datastore retrieval)
-    mock_reflections = [
-        "I struggled to draw a perfect circle with the turtle.",
-        "I want to learn how to add labels to my drawings next time.",
-        "Today I finally figured out how to use the repeat loop!"
-    ]
+    logger.info(f"REQUEST - /history/summary/{activity_id} - IP: {client_ip}")
     
     try:
-        summary = agent.generate_historical_summary(mock_reflections)
+        summary = agent.generate_historical_summary(
+            activity_id=activity_id,
+            user_id=user_id,
+        )
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - /history/summary/{activity_id} - Success - Time: {process_time:.2f}s")
@@ -360,6 +356,6 @@ async def get_historical_summary(
             "activity_id": activity_id,
             "historical_summary": summary
         }
-    except Exception as e:
-        logger.error(f"ERROR - /history/summary/{activity_id} - Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating historical summary: {str(e)}")
+    except Exception:
+        logger.error(f"ERROR - /history/summary/{activity_id} - Failed to generate summary")
+        raise HTTPException(status_code=500, detail="Error generating historical summary")
