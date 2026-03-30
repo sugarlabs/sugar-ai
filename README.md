@@ -39,6 +39,21 @@ The FastAPI server provides endpoints to interact with Sugar-AI.
 ```sh
 pip install -r requirements.txt
 ```
+## Local Development (DEV_MODE)
+
+By default, Sugar-AI loads large language models intended for production use.
+These models may require significant memory and can cause startup failures
+on low-memory contributor machines.
+
+To improve the local development experience, Sugar-AI provides a development
+mode that uses a lightweight, CPU-friendly model.
+
+### Enable DEV_MODE
+
+```bash
+DEV_MODE=1 python main.py
+```
+
 
 ### Run the server
 
