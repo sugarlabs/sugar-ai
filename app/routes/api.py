@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Optional, List
 
 from app.database import get_db, APIKey
-from app.ai import RAGAgent
+from app.ai import RAGAgent, extract_answer_from_output
 from app.config import settings
 
 # Pydantic models for chat completions
@@ -38,9 +38,8 @@ router = APIRouter(tags=["api"])
 # setup logging
 logger = logging.getLogger("sugar-ai")
 
-# load ai agent and document paths
-agent = RAGAgent(model=settings.DEFAULT_MODEL)
-agent.retriever = agent.setup_vectorstore(settings.DOC_PATHS)
+# Initialize the agent
+agent = None
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
@@ -132,7 +131,7 @@ async def ask_llm(
     
     try:
         response = agent.model(question)
-        answer = response[0]['generated_text'].split("Answer:")[-1].strip()
+        answer = extract_answer_from_output(response)
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")

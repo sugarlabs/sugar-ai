@@ -35,20 +35,28 @@ WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 REPO_PATH_LOCALLY = os.getenv('REPO_PATH_LOCALLY')
 GIT_PATH = os.getenv('GIT_PATH')
 
-if not WEBHOOK_SECRET:
-    logger.error("WEBHOOK_SECRET not found in .env file")
-    raise ValueError("WEBHOOK_SECRET is required")
+_webhook_configured = all([WEBHOOK_SECRET, REPO_PATH_LOCALLY, GIT_PATH])
 
-if not REPO_PATH_LOCALLY:
-    logger.error("REPO_PATH_LOCALLY not found in .env file")
-    raise ValueError("REPO_PATH_LOCALLY is required")
+if not _webhook_configured:
+    _missing = [
+        name for name, val in [
+            ("WEBHOOK_SECRET", WEBHOOK_SECRET),
+            ("REPO_PATH_LOCALLY", REPO_PATH_LOCALLY),
+            ("GIT_PATH", GIT_PATH),
+        ]
+        if not val
+    ]
+    logger.warning(
+        "Webhook is disabled — missing env var(s): %s. "
+        "The /webhook endpoint will return 503 until they are set.",
+        ", ".join(_missing),
+    )
 
-if not GIT_PATH:
-    logger.error("GIT_PATH not found in .env file")
-    raise ValueError("GIT_PATH is required")
 
 def verify_github_signature(body: bytes, signature: str) -> bool:
     """Verify GitHub webhook signature"""
+    if not _webhook_configured:
+        return False
     if not signature:
         return False
     
@@ -57,7 +65,6 @@ def verify_github_signature(body: bytes, signature: str) -> bool:
         if sha_name != 'sha256':
             return False
         
-        # Create HMAC using request body and webhook secret
         mac = hmac.new(
             WEBHOOK_SECRET.encode('utf-8'), 
             msg=body, 
@@ -72,8 +79,16 @@ def verify_github_signature(body: bytes, signature: str) -> bool:
 @router.post("/webhook")
 async def webhook(request: Request):
     """GitHub webhook endpoint for handling repository updates"""
+    if not _webhook_configured:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "message": "Webhook is not configured — required env vars are missing",
+            },
+        )
+
     try:
-        # Read the request body
         body = await request.body()
         signature = request.headers.get('X-Hub-Signature-256')
         

@@ -24,9 +24,11 @@ from sqlalchemy.orm import Session
 import os
 
 from app import create_app
+from app.ai import RAGAgent
 from app.database import get_db
 from app.auth import sync_env_keys_to_db
 from app.config import settings
+from app.routes import api
 
 # setup logging
 logger = logging.getLogger("sugar-ai")
@@ -38,7 +40,22 @@ async def startup_event():
     """Initialize data on app startup"""
     db = next(get_db())
     sync_env_keys_to_db(db)
-    logger.info(f"Starting Sugar-AI with model: {settings.DEFAULT_MODEL}")
+    if settings.DEV_MODE:
+        active_model = settings.DEV_MODEL_NAME
+        logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
+    else:
+        active_model = settings.PROD_MODEL_NAME
+        logger.info(f"PRODUCTION mode. Loading full model: {active_model}")
+
+    initialized_agent = RAGAgent(model=active_model)
+    initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
+
+    # Inject this instance into the API module
+    # This updates the 'agent = None' in api.py to be the real loaded model
+    api.agent = initialized_agent
+    
+    app.state.agent = initialized_agent
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
