@@ -115,3 +115,20 @@ Answer:
 
 # Sugar-AI:
 """
+
+LONGITUDINAL_SUMMARY_PROMPT = """
+You are an expert educational AI mentor. Your task is to generate a 'Growth Summary' based on a student's past reflections from their activities.
+
+Past Reflections:
+{reflections}
+
+Instructions:
+1. Identify what the student struggled with previously.
+2. Extract what goals they set in their past sessions.
+3. Summarize how their current work relates to their historical progress.
+4. Output the summary in a format that can be directly injected into a system prompt for a future tutoring session.
+5. CRITICAL: Do not include ANY personal information (PII) like names, locations, or usernames in the summary.
+6. Generate the response in LESS THAN 150 WORDS.
+
+Answer:
+"""

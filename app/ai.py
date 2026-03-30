@@ -119,6 +119,7 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+        self.summary_prompt = ChatPromptTemplate.from_template(prompts.LONGITUDINAL_SUMMARY_PROMPT)
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
@@ -284,6 +285,37 @@ class RAGAgent:
             
         except Exception as e:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
+
+    def generate_historical_summary(self, reflections: List[str]) -> str:
+        """
+        Generate a pedagogical growth summary from a list of past reflections.
+        
+        Args:
+            reflections: A list of strings containing past student reflections.
+            
+        Returns:
+            The generated summary string.
+        """
+        if not reflections:
+            return "No past reflections found."
+            
+        # Combine the reflections into a single string
+        combined_reflections = "\\n".join(f"- {r}" for r in reflections)
+        
+        # Build the chain: prompt -> combine -> model -> extract
+        chain = (
+            self.summary_prompt
+            | combine_messages
+            | self.model
+            | extract_answer_from_output
+        )
+        
+        try:
+            response = chain.invoke({"reflections": combined_reflections})
+            return response
+        except Exception as e:
+            logger.error(f"Error generating historical summary: {str(e)}")
+            return "Unable to generate summary at this time."
 
     def _normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
         """

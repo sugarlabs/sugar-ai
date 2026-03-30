@@ -326,3 +326,40 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+
+@router.get("/history/summary/{activity_id}")
+async def get_historical_summary(
+    activity_id: str,
+    user_id: Optional[str] = None,
+    user_info: dict = Depends(verify_api_key),
+    request: Request = None
+):
+    """
+    Generate a historical 'Growth Summary' from past reflections for a specific activity.
+    Note: Direct integration with sugar-datastore is pending; currently uses mock data.
+    """
+    start_time = time.time()
+    client_ip = request.client.host if request else "unknown"
+    logger.info(f"REQUEST - /history/summary/{activity_id} - User: {user_info['name']} - IP: {client_ip}")
+
+    # Mock reflection data (to be replaced by actual datastore retrieval)
+    mock_reflections = [
+        "I struggled to draw a perfect circle with the turtle.",
+        "I want to learn how to add labels to my drawings next time.",
+        "Today I finally figured out how to use the repeat loop!"
+    ]
+    
+    try:
+        summary = agent.generate_historical_summary(mock_reflections)
+        
+        process_time = time.time() - start_time
+        logger.info(f"RESPONSE - /history/summary/{activity_id} - Success - Time: {process_time:.2f}s")
+        
+        return {
+            "status": "success",
+            "activity_id": activity_id,
+            "historical_summary": summary
+        }
+    except Exception as e:
+        logger.error(f"ERROR - /history/summary/{activity_id} - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating historical summary: {str(e)}")
