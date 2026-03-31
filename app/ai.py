@@ -2,14 +2,12 @@
 AI functionality for Sugar-AI, including RAG and LLM components.
 """
 import os
-import torch
-from transformers import pipeline
+from app.providers.factory import get_provider
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from typing import Optional, List
 import app.prompts as prompts
 from app.config import settings
@@ -50,67 +48,24 @@ class RAGAgent:
     """Retrieval-Augmented Generation agent for Sugar-AI"""
       
     def __init__(self, model: Optional[str] = None, quantize: bool = True):
-        # 1) Determine model name with clear precedence:
-        #    explicit argument > DEV_MODEL_NAME (if DEV_MODE) > PROD_MODEL_NAME > DEFAULT_MODEL
+        # Determine the model name
         if model:
             self.model_name = model
-            logger.info("Using explicit model argument: %s", self.model_name)
         else:
-            if getattr(settings, "DEV_MODE", False):
-                # prefer DEV_MODEL_NAME, then fallback to DEFAULT_MODEL
-                self.model_name = getattr(settings, "DEV_MODEL_NAME", settings.DEFAULT_MODEL)
-                logger.info("DEV_MODE active: using lightweight model %s", self.model_name)
-            else:
-                # production: prefer PROD_MODEL_NAME, else DEFAULT_MODEL
-                self.model_name = getattr(settings, "PROD_MODEL_NAME", settings.DEFAULT_MODEL)
-                logger.info("Using production model %s", self.model_name)
+            self.model_name = getattr(settings, "PROD_MODEL_NAME", settings.DEFAULT_MODEL)
 
+        # Initialize the provider (This is the fix for #51!)
+        self.provider = get_provider(self.model_name)
+
+        # Keep the standard RAG components
+        self.retriever: Optional[FAISS] = None
+        self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
         # 2) Compute quantization/device choices. Keep quantization off in DEV_MODE by default.
         self.use_quant = quantize and torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False)
         device = 0 if torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False) else -1
         dtype = torch.float16 if device == 0 else torch.float32
 
-        if self.use_quant:
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4"
-            )
-
-            tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            model_obj = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                quantization_config=bnb_config,
-                torch_dtype=torch.float16,
-                device_map="auto"
-            )
-            self.model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
-            
-            self.simplify_model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
-        else:
-            self.model = pipeline(
-                "text-generation",
-                model=self.model_name,
-                max_new_tokens=1024,
-                truncation=True,
-                torch_dtype=dtype, # Use the dynamic dtype
-                device=device,     # Use the dynamic device
-            )
-
-            self.simplify_model = self.model
+        self.simplify_model = self.model
 
         self.retriever: Optional[FAISS] = None
         self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
@@ -119,6 +74,10 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+
+    def query(self, question: str, context: str = ""):
+        """Use the provider to generate a response"""
+        return self.provider.query(question, context=context)
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
