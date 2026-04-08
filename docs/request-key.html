@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request API Key - Sugar-AI</title>
+    <link rel="stylesheet" href="assets/css/forms.css">
+</head>
+<body>
+    <h1>Request Sugar-AI API Key</h1>
+
+    <div id="message" class="message" style="display:none;"></div>
+
+    <form id="request-form">
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+
+        <div class="form-group">
+            <label for="reason">Why do you need access to Sugar-AI?</label>
+            <textarea id="reason" name="reason" rows="4" required></textarea>
+        </div>
+
+        <button type="submit">Submit Request</button>
+    </form>
+
+    <a href="index.html" class="return-link">Return to Homepage</a>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/wake.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const form = document.getElementById("request-form");
+            const msg = document.getElementById("message");
+
+            form.addEventListener("submit", async function (e) {
+                e.preventDefault();
+                msg.style.display = "none";
+
+                const body = {
+                    name: document.getElementById("name").value.trim(),
+                    email: document.getElementById("email").value.trim(),
+                    reason: document.getElementById("reason").value.trim()
+                };
+
+                try {
+                    await window.SugarApi.apiJson("/api/request-key", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body)
+                    });
+                    msg.className = "message success";
+                    msg.textContent = "Your API key request has been submitted. You will be notified once it's approved.";
+                    msg.style.display = "block";
+                    form.reset();
+                } catch (err) {
+                    msg.className = "message error";
+                    msg.textContent = "Request failed: " + err.message;
+                    msg.style.display = "block";
+                }
+            });
+        });
+    </script>
+</body>
+</html>

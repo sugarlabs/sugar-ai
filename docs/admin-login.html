@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Login - Sugar-AI</title>
+    <link rel="stylesheet" href="assets/css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h1>Sugar-AI Login</h1>
+        <p id="login-error" class="error" style="display:none;"></p>
+
+        <form id="api-key-form">
+            <label for="api_key">Enter your API Key:</label>
+            <input type="password" id="api_key" name="api_key" required>
+            <button type="submit">Login</button>
+        </form>
+
+        <div class="links">
+            <a href="request-key.html">Request an API Key</a>
+            <a href="oauth-login.html">Login with GitHub/Google</a>
+            <a href="index.html">Return to Homepage</a>
+        </div>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/wake.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const form = document.getElementById("api-key-form");
+            const errorBox = document.getElementById("login-error");
+
+            form.addEventListener("submit", async function (e) {
+                e.preventDefault();
+                errorBox.style.display = "none";
+                const key = document.getElementById("api_key").value.trim();
+                if (!key) return;
+
+                try {
+                    const user = await window.SugarApi.apiJson("/api/user", {
+                        headers: { "X-API-Key": key }
+                    });
+                    window.SugarAuth.setApiKey(key);
+                    window.location.href = user.can_change_model ? "admin.html" : "dashboard.html";
+                } catch (err) {
+                    errorBox.textContent = "Invalid API key.";
+                    errorBox.style.display = "block";
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -32,7 +32,14 @@ class Settings(BaseSettings):
     
     # application settings
     TEMPLATES_DIR: str = "templates"
-    
+
+    FRONTEND_URL: Optional[str] = None
+    ALLOWED_ORIGINS: str = "http://localhost:8000,http://localhost:3000,http://127.0.0.1:8000"
+
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
     class Config:
         env_file = ".env"
         extra = "allow"  # this allows extra attribute if we have any

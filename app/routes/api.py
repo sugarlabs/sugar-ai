@@ -13,12 +13,18 @@ from typing import Dict, Optional, List
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent, extract_answer_from_output
+from app.auth import generate_api_key, get_current_user
 from app.config import settings
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
     role: str  # "system", "user", "assistant" 
     content: str
+
+class RequestKeyBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    email: str = Field(..., min_length=3, max_length=320)
+    reason: str = Field(..., min_length=1, max_length=2000)
 
 class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
@@ -294,6 +300,78 @@ async def debug(
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+@router.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
+@router.get("/api/user")
+async def get_user(
+    user_data: tuple = Depends(get_current_user),
+    request: Request = None
+):
+    user, authenticated = user_data
+    if not authenticated or not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    today = datetime.now().date()
+    used = 0
+    if user.key in user_quotas and user_quotas[user.key].get("date") == today:
+        used = user_quotas[user.key].get("count", 0)
+    remaining = max(settings.MAX_DAILY_REQUESTS - used, 0)
+
+    picture = None
+    if request is not None:
+        session_user = request.session.get("user") if hasattr(request, "session") else None
+        if session_user:
+            picture = session_user.get("picture") or session_user.get("avatar_url")
+
+    return {
+        "name": user.name,
+        "email": user.email,
+        "api_key": user.key,
+        "can_change_model": user.can_change_model,
+        "is_active": user.is_active,
+        "picture": picture,
+        "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+    }
+
+@router.post("/api/request-key")
+async def request_key_json(
+    body: RequestKeyBody,
+    db: Session = Depends(get_db)
+):
+    api_key = generate_api_key()
+    new_key = APIKey(
+        key=api_key,
+        name=body.name,
+        email=body.email,
+        request_reason=body.reason,
+        approved=False,
+        is_active=False
+    )
+    db.add(new_key)
+    db.commit()
+    return {"status": "ok", "message": "Request submitted. You will be notified once it's approved."}
+
+@router.get("/api/admin/keys")
+async def admin_list_keys(
+    user_data: tuple = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user, authenticated = user_data
+    if not authenticated or not user or not user.can_change_model:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    pending = db.query(APIKey).filter(APIKey.approved == False, APIKey.is_active == False).all()
+    approved = db.query(APIKey).filter(APIKey.approved == True).all()
+    denied = db.query(APIKey).filter(APIKey.approved == False, APIKey.is_active == True).all()
+
+    return {
+        "pending": [k.to_dict() | {"id": k.id, "request_reason": k.request_reason} for k in pending],
+        "approved": [k.to_dict() | {"id": k.id} for k in approved],
+        "denied": [k.to_dict() | {"id": k.id, "request_reason": k.request_reason} for k in denied],
+    }
 
 @router.post("/change-model")
 async def change_model(
