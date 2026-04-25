@@ -92,14 +92,6 @@ class RAGAgent:
                 max_new_tokens=1024,
                 truncation=True,
             )
-            
-            self.simplify_model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
         else:
             self.model = pipeline(
                 "text-generation",
@@ -110,11 +102,8 @@ class RAGAgent:
                 device=device,     # Use the dynamic device
             )
 
-            self.simplify_model = self.model
-
         self.retriever: Optional[FAISS] = None
         self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
-        self.child_prompt = ChatPromptTemplate.from_template(prompts.CHILD_FRIENDLY_PROMPT)
         self.debug_prompt = ChatPromptTemplate.from_template(prompts.CODE_DEBUG_PROMPT)
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
@@ -130,8 +119,6 @@ class RAGAgent:
             truncation=True,
             torch_dtype=torch.float16
         )
-        
-        self.simplify_model = self.model
 
     def setup_vectorstore(self, file_paths: List[str]) -> Optional[FAISS]:
         """Load documents and create a vector store for retrieval"""
@@ -211,8 +198,8 @@ class RAGAgent:
             "question": RunnablePassthrough()
         }
         
-        # first chain: prompt -> combine messages -> model -> extract answer
-        first_chain = (
+        # prompt -> combine messages -> model -> extract answer
+        rag_chain = (
             chain_input
             | self.prompt
             | combine_messages
@@ -222,24 +209,12 @@ class RAGAgent:
         
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
-            first_response = first_chain.invoke({
+            return rag_chain.invoke({
                 "query": question,
                 "context": doc_result.page_content
             })
-        else:
-            first_response = first_chain.invoke(question)
 
-        # second chain for making answer child-friendly
-        second_chain = (
-            {"original_answer": lambda x: x}
-            | self.child_prompt
-            | combine_messages
-            | self.simplify_model
-            | extract_answer_from_output
-        )
-        
-        final_response = second_chain.invoke(first_response)
-        return final_response
+        return rag_chain.invoke(question)
 
     def run_with_custom_prompt(self, question: str, custom_prompt: str, 
                              max_length: int = 1024, truncation: bool = True,
