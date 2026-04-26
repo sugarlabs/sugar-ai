@@ -565,4 +565,15 @@ Sugar-AI also provides a Streamlit-based interface for quick interactions and vi
 
 ![Streamlit UI](streamlit.png)
 
-Enjoy exploring Sugar-AI through both API endpoints and the interactive Streamlit interface!
+Enjoy exploring Sugar-AI through both API endpoints and the interactive Streamlit interface       ## Quick Start
+
+1. Clone the repository  
+2. Install dependencies using pip  
+3. Run the server using uvicorn  
+
+Example:
+
+git clone https://github.com/sugarlabs/sugar-ai.git
+cd sugar-ai
+pip install -r requirements.txt
+uvicorn main:app --reload
