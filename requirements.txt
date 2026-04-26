@@ -19,3 +19,4 @@ httpx
 pydantic-settings
 sentence-transformers
 python-dotenv
+transformers>=4.45.2,<5.0.0
