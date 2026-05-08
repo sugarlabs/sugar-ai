@@ -125,6 +125,8 @@ class RAGAgent:
         self.model_name = model
         self.model = pipeline(
             "text-generation",
+            model=model,
+            max_new_tokens=1024,
             model=self.model_name,
             max_length=1024,
             truncation=True,
