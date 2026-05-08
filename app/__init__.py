@@ -10,7 +10,6 @@ import os
 import logging
 
 from app.auth import setup_oauth
-from app.database import create_tables
 
 # setup logging
 logging.basicConfig(
@@ -23,8 +22,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sugar-ai")
 
-def create_app() -> FastAPI:
-    app = FastAPI()
+def create_app(lifespan=None) -> FastAPI:
+    app = FastAPI(lifespan=lifespan)
     
     # apply middlewares
     app = setup_oauth(app)
@@ -41,8 +40,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     
-    # ensure DB tables exist
-    create_tables()
     
     # mount static files
     static_dir = "static"
