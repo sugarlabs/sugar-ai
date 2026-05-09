@@ -30,7 +30,7 @@ async def logout(request: Request):
 @router.get("/oauth-login", response_class=HTMLResponse)
 async def login(request: Request):
     """Render OAuth login page"""
-    return templates.TemplateResponse("oauth_login.html", {"request": request})
+    return templates.TemplateResponse(request, "oauth_login.html", {})
 
 @router.get("/auth/github")
 async def login_github(request: Request):
@@ -137,7 +137,7 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
 @router.get("/admin-login", response_class=HTMLResponse)
 async def admin_login(request: Request):
     """Render admin login page"""
-    return templates.TemplateResponse("admin_login.html", {"request": request})
+    return templates.TemplateResponse(request, "admin_login.html", {})
 
 @router.post("/admin-login")
 async def admin_login_submit(
@@ -155,8 +155,9 @@ async def admin_login_submit(
     
     if not key:
         return templates.TemplateResponse(
-            "admin_login.html", 
-            {"request": request, "error": "Invalid API key"}
+            request,
+            "admin_login.html",
+            {"error": "Invalid API key"},
         )
     
     # redirect based on permissions
@@ -167,7 +168,7 @@ async def admin_login_submit(
 @router.get("/request-key", response_class=HTMLResponse)
 async def request_key_form(request: Request):
     """Render API key request page"""
-    return templates.TemplateResponse("request_key.html", {"request": request})
+    return templates.TemplateResponse(request, "request_key.html", {})
 
 @router.post("/request-key", response_class=HTMLResponse)
 async def submit_key_request(
@@ -192,10 +193,10 @@ async def submit_key_request(
     db.commit()
     
     return templates.TemplateResponse(
-        "request_key.html", 
+        request,
+        "request_key.html",
         {
-            "request": request, 
             "message": "Your API key request has been submitted. You will be notified once it's approved.",
-            "success": True
-        }
+            "success": True,
+        },
     )

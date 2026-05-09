@@ -3,13 +3,18 @@
   <head>
     <title>API Key Admin - Sugar-AI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/static/css/admin.css">
+    <link rel="stylesheet" href="/static/css/admin.css?v=3">
   </head>
   <body>
-    <h1>Sugar-AI API Key Administration</h1>
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Admin Console</p>
+        <h1>Sugar-AI API Key Administration</h1>
+      </div>
 
-    <div class="logout-container">
-      <a href="/logout" class="logout-btn">Logout</a>
+      <div class="logout-container">
+        <a href="/logout" class="logout-btn">Logout</a>
+      </div>
     </div>
 
     {% if message %}
@@ -27,6 +32,9 @@
       </button>
       <button class="tablinks" onclick="openTab(event, 'Denied')">
         Denied Requests
+      </button>
+      <button class="tablinks" onclick="openTab(event, 'Models')">
+        Models
       </button>
       
     </div>
@@ -121,6 +129,144 @@
       </table>
     </div>
 
-    <script src="/static/js/admin.js"></script>
+    <div id="Models" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>Model Management</h2>
+          <p class="section-subtitle">Manage available OpenAI-compatible model endpoints.</p>
+        </div>
+        <button type="button" class="action-btn save-model" onclick="openCreateModelModal()">
+          Add Model
+        </button>
+      </div>
+
+      {% if startup_error %}
+      <div class="message error">
+        Current startup error: {{ startup_error }}
+      </div>
+      {% endif %}
+
+      <table class="models-table">
+        <tr>
+          <th>Name</th>
+          <th>Provider</th>
+          <th>Base URL</th>
+          <th>Model</th>
+          <th>Max Length</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+        {% for model in models %}
+        <tr>
+          <td>{{ model.name }}</td>
+          <td>{{ model.provider_type }}</td>
+          <td>{{ model.base_url }}</td>
+          <td>{{ model.model_name }}</td>
+          <td>{{ model.max_model_length or "-" }}</td>
+          <td>
+            {% if model.deleted_at %}
+              Deleted
+            {% elif model.is_active %}
+              Active
+            {% else %}
+              Inactive
+            {% endif %}
+          </td>
+          <td>
+            <button
+              type="button"
+              class="action-btn edit-model"
+              onclick='editModel({{ {
+                "id": model.id,
+                "name": model.name,
+                "provider_type": model.provider_type,
+                "base_url": model.base_url,
+                "api_key": model.api_key,
+                "model_name": model.model_name,
+                "max_model_length": model.max_model_length,
+                "is_active": model.is_active
+              } | tojson }})'
+            >
+              Edit
+            </button>
+            {% if not model.is_active and not model.deleted_at %}
+            <button type="button" class="action-btn activate-model" onclick="activateModel({{ model.id }})">
+              Activate
+            </button>
+            {% endif %}
+            {% if not model.deleted_at %}
+            <button type="button" class="action-btn delete-model" onclick='deleteModel({{ model.id }}, {{ model.name | tojson }})'>
+              Delete
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <dialog id="model-modal" class="model-dialog" aria-labelledby="model-form-title">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Model</p>
+            <h3 id="model-form-title">Add Model</h3>
+          </div>
+          <button type="button" class="modal-close" onclick="closeModelModal()" aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        <form id="model-form" class="modal-form">
+          <input type="hidden" id="model-id" />
+
+          <div class="model-form-grid">
+            <label>
+              <span>Name</span>
+              <input id="model-name" class="admin-input" type="text" required />
+            </label>
+
+            <label>
+              <span>Provider Type</span>
+              <input id="model-provider-type" class="admin-input" type="text" value="openai_compatible" required />
+            </label>
+
+            <label>
+              <span>Base URL</span>
+              <input id="model-base-url" class="admin-input" type="text" placeholder="http://ollama:11434/v1" required />
+            </label>
+
+            <label>
+              <span>Model Name</span>
+              <input id="model-model-name" class="admin-input" type="text" placeholder="qwen2.5:1.5b" required />
+            </label>
+
+            <label>
+              <span>API Key</span>
+              <input id="model-api-key" class="admin-input" type="text" placeholder="ollama" />
+            </label>
+
+            <label>
+              <span>Max Length</span>
+              <input id="model-max-length" class="admin-input" type="number" min="1" placeholder="4096" />
+            </label>
+          </div>
+
+          <label class="checkbox-row">
+            <input id="model-is-active" type="checkbox" />
+            <span>Set as active after save</span>
+          </label>
+
+          <div class="model-form-actions">
+            <button type="submit" class="action-btn save-model" id="model-submit-btn">Add Model</button>
+            <button type="button" class="action-btn secondary-btn" onclick="closeModelModal()">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <script src="/static/js/admin.js?v=3"></script>
   </body>
 </html>

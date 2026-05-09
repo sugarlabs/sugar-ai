@@ -1,7 +1,6 @@
 """
 Configuration settings for Sugar-AI.
 """
-import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Dict, List, Any, Optional
@@ -9,16 +8,19 @@ from typing import Dict, List, Any, Optional
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
-    # Dev mode (THIS MUST EXIST)
-    DEV_MODE: bool = os.getenv("DEV_MODE", "0") == "1"
-    DEV_MODEL_NAME: str | None = None
-    PROD_MODEL_NAME: str | None = None
-    DEFAULT_MODEL: str | None = None
-    
+    model_config = SettingsConfigDict(env_file=".env", extra="allow")
+
     API_KEYS: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     MODEL_CHANGE_PASSWORD: str = ""
     DOC_PATHS: List[str] = Field(default_factory=list)
     MAX_DAILY_REQUESTS: int = 100
+
+    LLM_PROVIDER_TYPE: str = "openai_compatible"
+    LLM_BASE_URL: Optional[str] = None
+    LLM_API_KEY: Optional[str] = None
+    LLM_MODEL_NAME: Optional[str] = None
+    LLM_MAX_MODEL_LENGTH: Optional[int] = None
+    LLM_DISPLAY_NAME: Optional[str] = None
 
     # OAuth
     github_client_id: Optional[str] = None
@@ -33,8 +35,4 @@ class Settings(BaseSettings):
     # application settings
     TEMPLATES_DIR: str = "templates"
     
-    class Config:
-        env_file = ".env"
-        extra = "allow"  # this allows extra attribute if we have any
-
 settings = Settings()

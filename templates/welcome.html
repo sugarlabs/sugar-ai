@@ -350,10 +350,8 @@ messages:
   ],
 max_length: maximum tokens in the output,
 truncation: whether to cut off text exceeding limits,
-repetition_penalty: penalizes repeated phrases,
 temperature: controls randomness/creativity,
-top_p: nucleus sampling for diversity (probability cutoff),
-top_k: restricts word choices to the top k candidates</pre>
+top_p: nucleus sampling for diversity (probability cutoff)</pre>
 
         <h4>Example Request:</h4>
         <pre>curl -X POST "http://localhost:8000/ask-llm-prompted" \
@@ -369,10 +367,8 @@ top_k: restricts word choices to the top k candidates</pre>
 ],
     "max_length": 512, #optional
     "truncation": false, #optional
-    "repetition_penalty": 1.1, #optional
     "temperature": 0.7, #optional
-    "top_p": 0.9, #optional
-    "top_k": 40 #optional
+    "top_p": 0.9 #optional
 }'</pre>
         
         <h4>Response Format:</h4>
@@ -395,10 +391,8 @@ top_k: restricts word choices to the top k candidates</pre>
     "generation_params": {
         "max_length": 512,
         "truncation": false,
-        "repetition_penalty": 1.1,
         "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40
+        "top_p": 0.9
     }
 }</pre>
       </div>
@@ -457,10 +451,8 @@ Content-Type: application/json</pre>
     "custom_prompt": "You are a coding tutor. Explain step-by-step with comments.",
     "max_length": 1024,
     "truncation": true,
-    "repetition_penalty": 1.1,
     "temperature": 0.7,
-    "top_p": 0.9,
-    "top_k": 50
+    "top_p": 0.9
   }'</pre>
         
         <h4>Request Parameters:</h4>
@@ -469,10 +461,8 @@ Content-Type: application/json</pre>
           <li><strong>custom_prompt</strong> (required): Your custom system prompt</li>
           <li><strong>max_length</strong> (optional, default: 1024): Maximum length of generated response</li>
           <li><strong>truncation</strong> (optional, default: true): Whether to truncate long inputs</li>
-          <li><strong>repetition_penalty</strong> (optional, default: 1.1): Controls repetition (1.0 = no penalty, >1.0 = less repetition)</li>
           <li><strong>temperature</strong> (optional, default: 0.7): Controls randomness (0.0 = deterministic, 1.0 = very random)</li>
           <li><strong>top_p</strong> (optional, default: 0.9): Nucleus sampling (0.1 = focused, 0.9 = diverse)</li>
-          <li><strong>top_k</strong> (optional, default: 50): Limits vocabulary to K most likely words</li>
         </ul>
         
         <h4>Response Format:</h4>
@@ -483,18 +473,16 @@ Content-Type: application/json</pre>
   "generation_params": {
     "max_length": 1024,
     "truncation": true,
-    "repetition_penalty": 1.1,
     "temperature": 0.7,
-    "top_p": 0.9,
-    "top_k": 50
+    "top_p": 0.9
   }
 }</pre>
 
         <h4>Generation Parameter Guidelines:</h4>
         <ul>
-          <li><strong>For Code:</strong> temperature: 0.2-0.4, top_p: 0.8, repetition_penalty: 1.1</li>
-          <li><strong>For Creative Content:</strong> temperature: 0.7-0.9, top_p: 0.9, repetition_penalty: 1.2</li>
-          <li><strong>For Factual Answers:</strong> temperature: 0.3-0.5, top_p: 0.7, repetition_penalty: 1.0</li>
+          <li><strong>For Code:</strong> temperature: 0.2-0.4, top_p: 0.8</li>
+          <li><strong>For Creative Content:</strong> temperature: 0.7-0.9, top_p: 0.9</li>
+          <li><strong>For Factual Answers:</strong> temperature: 0.3-0.5, top_p: 0.7</li>
         </ul>
         
         <h4>Use Cases:</h4>
@@ -508,15 +496,15 @@ Content-Type: application/json</pre>
     
    
     
-    <div class="endpoint admin-only">
+      <div class="endpoint admin-only">
       <h3>Change Model (Admin Only)</h3>
       <div class="endpoint-method">POST</div>
-      <div class="endpoint-url">/change-model?model={model_name}&api_key={admin_key}&password={admin_password}</div>
-      <p>Change the LLM model being used for responses. Requires admin API key and password.</p>
+      <div class="endpoint-url">/change-model?model_id={model_id}&api_key={admin_key}&password={admin_password}</div>
+      <p>Change the active LLM model record being used for responses. Requires admin API key and password.</p>
       
       <div class="endpoint-details">
         <h4>Example Request:</h4>
-        <pre>curl -X POST "http://localhost:8000/change-model?model=Qwen/Qwen2-1.5B-Instruct&api_key=admin_key&password=admin_password"</pre>
+        <pre>curl -X POST "http://localhost:8000/change-model?model_id=1&api_key=admin_key&password=admin_password"</pre>
         
        
         </ul>
