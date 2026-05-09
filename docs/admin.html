@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Admin - Sugar-AI</title>
+    <link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+    <h1>Sugar-AI API Key Administration</h1>
+
+    <div class="logout-container">
+        <button id="logout-btn" class="logout-btn">Logout</button>
+    </div>
+
+    <div id="message" class="message" style="display:none;"></div>
+
+    <div class="tabs">
+        <button class="tablinks active" data-tab="Pending">Pending Requests</button>
+        <button class="tablinks" data-tab="Approved">Approved Keys</button>
+        <button class="tablinks" data-tab="Denied">Denied Requests</button>
+    </div>
+
+    <div id="Pending" class="tab-content" style="display: block">
+        <h2>Pending Requests</h2>
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Email</th><th>Reason</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="pending-body"></tbody>
+        </table>
+    </div>
+
+    <div id="Approved" class="tab-content">
+        <h2>Approved API Keys</h2>
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Email</th><th>API Key</th><th>Admin</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="approved-body"></tbody>
+        </table>
+    </div>
+
+    <div id="Denied" class="tab-content">
+        <h2>Denied Requests</h2>
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Email</th><th>Reason</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="denied-body"></tbody>
+        </table>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/wake.js"></script>
+    <script src="assets/js/admin.js"></script>
+</body>
+</html>

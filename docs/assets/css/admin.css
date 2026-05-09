@@ -1,0 +1,225 @@
+/* admin panel styles */
+body {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+table, th, td {
+  border: 1px solid #ddd;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2;
+}
+
+tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.action-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 3px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+  min-width: 100px;
+  display: inline-block;
+  text-align: center;
+}
+
+.action-btn:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.approve {
+  background-color: #4caf50;
+  color: white;
+}
+
+.deny {
+  background-color: #f44336;
+  color: white;
+}
+
+.toggle-admin {
+  background-color: #673ab7;
+  color: white;
+}
+
+.toggle-status {
+  background-color: #2196f3;
+  color: white;
+}
+
+.message {
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 4px;
+}
+
+.success {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.error {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.tabs {
+  overflow: hidden;
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+}
+
+.tabs button {
+  background-color: inherit;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  transition: 0.3s;
+}
+
+.tabs button:hover {
+  background-color: #ddd;
+}
+
+.tabs button.active {
+  background-color: #ccc;
+}
+
+.tab-content {
+  display: none;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-top: none;
+}
+
+.logout-btn {
+  background-color: #f44336;
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.logout-container {
+  text-align: right;
+  margin-bottom: 20px;
+}
+
+.usage-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.usage-card {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 15px;
+  flex: 1;
+  margin: 0 10px;
+  text-align: center;
+}
+
+.usage-card:first-child {
+  margin-left: 0;
+}
+
+.usage-card:last-child {
+  margin-right: 0;
+}
+
+.usage-number {
+  font-size: 28px;
+  font-weight: bold;
+  color: #333;
+}
+
+.progress-bar {
+  background-color: #e0e0e0;
+  height: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress {
+  height: 100%;
+  background-color: #4CAF50;
+  transition: width 0.3s ease;
+}
+
+.input-group {
+  display: flex;
+  margin-bottom: 15px;
+}
+
+.admin-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px 0 0 4px;
+  font-size: 14px;
+}
+
+.input-group .action-btn {
+  border-radius: 0 4px 4px 0;
+  margin: 0;
+}
+
+#admin-key-form {
+  background-color: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+#admin-key-form p {
+  margin-top: 0;
+}
+
+#admin-key-form small {
+  color: #666;
+  font-style: italic;
+}
+
+.progress.medium {
+  background-color: #FFC107;
+}
+
+.progress.high {
+  background-color: #F44336;
+}
+
+.progress-bar span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #333;
+  font-size: 12px;
+  font-weight: bold;
+}

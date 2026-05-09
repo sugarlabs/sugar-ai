@@ -38,7 +38,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY *.py ./
 COPY templates/ ./templates/
 COPY static/ ./static/
-COPY docs/ ./docs/
+COPY rag_docs/ ./rag_docs/
 COPY app/ ./app/
 COPY .env* ./
 RUN mkdir -p /app/data

@@ -10,6 +10,7 @@ import os
 import logging
 
 from app.auth import setup_oauth
+from app.config import settings
 from app.database import create_tables
 
 # setup logging
@@ -33,9 +34,10 @@ def create_app() -> FastAPI:
         TrustedHostMiddleware, 
         allowed_hosts=["localhost", "127.0.0.1", "*"]  
     )
+    # Browsers reject allow_credentials + "*", so pin to the explicit list.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.allowed_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

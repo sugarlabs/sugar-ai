@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Sugar-AI</title>
+    <link rel="stylesheet" href="assets/css/common.css">
+    <link rel="stylesheet" href="assets/css/welcome.css">
+</head>
+<body>
+    <header>
+        <div class="container header-container">
+            <div class="logo">
+                <h1>Sugar-AI</h1>
+                <p>An AI-powered coding assistant for the Sugar Learning Platform</p>
+            </div>
+            <div class="nav-buttons">
+                <a href="oauth-login.html" class="nav-btn">Sign in with OAuth</a>
+                <a href="admin-login.html" class="nav-btn">API Key Login</a>
+                <a href="request-key.html" class="nav-btn primary">Request API Key</a>
+            </div>
+        </div>
+    </header>
+
+    <nav class="page-nav">
+        <div class="container">
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#use-cases">Use Cases</a></li>
+                <li><a href="#dashboard">Dashboard</a></li>
+                <li><a href="#api">API Usage</a></li>
+                <li><a href="#docs">API Documentation</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section id="overview" class="hero">
+            <h2>Welcome to Sugar-AI</h2>
+            <p>
+                Sugar-AI is a specialized coding assistant designed to help children
+                learn programming with the Sugar Learning Platform. It uses advanced
+                AI to provide child-friendly explanations and code examples.
+            </p>
+            <div class="hero-buttons">
+                <a href="request-key.html" class="btn btn-accent">Get Started</a>
+                <a href="https://github.com/sugarlabs/sugar-ai" class="btn">View on GitHub</a>
+            </div>
+        </section>
+
+        <h2 id="use-cases" class="section-title">How Sugar-AI Can Help You</h2>
+
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-content">
+                    <h3>For Students &amp; Teachers</h3>
+                    <p>Sugar-AI helps students and teachers learn coding with Sugar Labs tools:</p>
+                    <ul>
+                        <li>Ask questions about Pygame, GTK+3, and Sugar Toolkit</li>
+                        <li>Get explanations in child-friendly language</li>
+                        <li>Learn programming concepts step by step</li>
+                        <li>Receive examples tailored to Sugar activities</li>
+                        <li>Get kid-friendly debugging suggestions for your python programs</li>
+                        <li>Utilize the chat completion functionality to generate conversational model responses</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="request-key.html" class="btn">Request API Key</a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-content">
+                    <h3>For Developers</h3>
+                    <p>Integrate Sugar-AI with your applications using our simple API:</p>
+                    <ul>
+                        <li>RESTful API endpoints for easy integration</li>
+                        <li>Secure authentication with API keys</li>
+                        <li>RAG (Retrieval-Augmented Generation) for accurate answers</li>
+                        <li>Documented endpoints for developers</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="https://github.com/sugarlabs/sugar-ai" class="btn">View on GitHub</a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-content">
+                    <h3>For Administrators</h3>
+                    <p>Manage Sugar-AI and monitor usage through the admin panel:</p>
+                    <ul>
+                        <li>Approve or deny API key requests</li>
+                        <li>Monitor system quotas</li>
+                        <li>Manage user permissions</li>
+                        <li>Control access to advanced features</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="admin-login.html" class="btn btn-accent">Admin Login</a>
+                </div>
+            </div>
+        </div>
+
+        <h2 id="dashboard" class="section-title">Your Sugar-AI Dashboard</h2>
+
+        <div class="card">
+            <h3>Dashboard Overview</h3>
+            <p>
+                The Sugar-AI Dashboard is your personal control center, accessible
+                after signing in with OAuth or an API key. Here's what you can do:
+            </p>
+
+            <div class="feature-grid" style="margin-top: 30px">
+                <div class="feature">
+                    <h3>Interactive Chat</h3>
+                    <p>Ask questions directly to the AI and receive instant responses about Sugar development.</p>
+                </div>
+                <div class="feature">
+                    <h3>RAG Toggle</h3>
+                    <p>Switch between knowledge-enhanced responses and direct language model responses.</p>
+                </div>
+                <div class="feature">
+                    <h3>Usage Metrics</h3>
+                    <p>Track your API usage and remaining quota.</p>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px">
+                <a href="oauth-login.html" class="btn">Access Dashboard</a>
+            </div>
+        </div>
+
+        <h2 id="api" class="section-title">API Usage</h2>
+
+        <div class="card">
+            <h3>Using the Sugar-AI API</h3>
+            <p>Integrate Sugar-AI's capabilities into your own applications with our straightforward API:</p>
+
+            <div class="code-example">
+                <h4>Python Example</h4>
+                <pre><code>import requests
+
+api_key = "YOUR_API_KEY"
+url = "https://sugar-ai.sugarlabs.org/ask"
+params = {"question": "How do I create a Pygame window?"}
+headers = {"X-API-Key": api_key}
+
+response = requests.post(url, params=params, headers=headers)
+print(response.json()["answer"])</code></pre>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px">
+                <a href="request-key.html" class="btn btn-accent">Get Your API Key</a>
+            </div>
+        </div>
+
+        <div class="documentation-section">
+            <h2 id="docs" class="section-title">API Endpoints Documentation</h2>
+            <p style="text-align:center;">
+                Full reference lives in the
+                <a href="https://github.com/sugarlabs/sugar-ai#readme">README</a>
+                and the backend's auto-generated
+                <span id="docs-link">/docs</span> page.
+            </p>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/sugarlabs/sugar-ai">GitHub</a>
+                <a href="https://www.sugarlabs.org/">Sugar Labs</a>
+                <a href="request-key.html">Request API Key</a>
+                <a href="admin-login.html">Admin Login</a>
+            </div>
+            <p>&copy; 2025 Sugar-AI. Licensed under GNU GPL v3.</p>
+        </div>
+    </footer>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/wake.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const link = document.getElementById("docs-link");
+            if (link && window.SugarApi) {
+                const a = document.createElement("a");
+                a.href = window.SugarApi.backendUrl("/docs");
+                a.textContent = "/docs";
+                link.replaceWith(a);
+            }
+        });
+    </script>
+</body>
+</html>

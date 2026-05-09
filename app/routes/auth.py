@@ -6,10 +6,32 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import logging
+from urllib.parse import urlencode, urlparse
 
 from app.database import get_db, APIKey
 from app.auth import oauth, generate_api_key
 from app.config import settings
+
+
+def _validate_frontend_redirect(url: str) -> str:
+    # Only return the url if its origin is in ALLOWED_ORIGINS, otherwise an
+    # open redirect would let anyone phish an OAuth-issued API key.
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return url if origin in settings.allowed_origins_list else ""
+
+
+def _frontend_success_redirect(request: Request, api_key: str) -> RedirectResponse:
+    raw_target = request.session.pop("frontend_redirect", "")
+    target = _validate_frontend_redirect(raw_target) or settings.FRONTEND_URL
+    if target:
+        sep = "&" if "?" in target else "?"
+        return RedirectResponse(url=f"{target}{sep}{urlencode({'api_key': api_key})}")
+    return RedirectResponse(url="/dashboard")
 
 router = APIRouter(tags=["auth"])
 
@@ -35,6 +57,9 @@ async def login(request: Request):
 @router.get("/auth/github")
 async def login_github(request: Request):
     """Redirect to GitHub OAuth login"""
+    request.session["frontend_redirect"] = _validate_frontend_redirect(
+        request.query_params.get("frontend_redirect", "")
+    )
     redirect_uri = request.url_for("auth_callback", provider="github")
     return await oauth.github.authorize_redirect(request, redirect_uri)
 
@@ -42,10 +67,13 @@ async def login_github(request: Request):
 async def login_google(request: Request):
     """Redirect to Google OAuth login"""
     try:
+        request.session["frontend_redirect"] = _validate_frontend_redirect(
+            request.query_params.get("frontend_redirect", "")
+        )
         # create explicit redirect URI
         base_url = str(request.base_url).rstrip("/")
         redirect_uri = f"{base_url}/auth/callback/google"
-        
+
         logger.info(f"Google OAuth redirect using URI: {redirect_uri}")
         return await oauth.google.authorize_redirect(request, redirect_uri=redirect_uri)
     except Exception as e:
@@ -107,7 +135,7 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
             return RedirectResponse(url="/oauth-login?error=No email found")
             
         existing_key = db.query(APIKey).filter(APIKey.email == email).first()
-        
+
         if not existing_key:
             # create new API key for OAuth user
             api_key = generate_api_key()
@@ -122,14 +150,14 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
             db.add(new_key)
             db.commit()
             logger.info(f"Created new API key for OAuth user: {email}")
-            
-            # update API_KEYS in memory
+
             settings.API_KEYS[api_key] = {"name": new_key.name, "can_change_model": new_key.can_change_model}
+            resolved_key = api_key
         else:
-            # update in-memory API_KEYS for existing key
             settings.API_KEYS[existing_key.key] = {"name": existing_key.name, "can_change_model": existing_key.can_change_model}
-        
-        return RedirectResponse(url="/dashboard")
+            resolved_key = existing_key.key
+
+        return _frontend_success_redirect(request, resolved_key)
     except Exception as e:
         logger.error(f"OAuth error: {str(e)}")
         return RedirectResponse(url="/oauth-login?error=Authentication failed")
