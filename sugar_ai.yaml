@@ -1,0 +1,105 @@
+# sugar_ai.yaml — Sugar-AI backend configuration
+#
+# This file configures which AI model backend sugar-ai uses.
+# Place this file in the project root directory.
+#
+# Backends available:
+#   huggingface   - HuggingFace Transformers (Qwen2, SmolLM2, Gemma, Phi)
+#   llamacpp      - llama-cpp-python GGUF models (existing path)
+#   onnx          - ONNX Runtime (zero C++ compilation, ARM-ready)
+#   openai_compat - OpenAI-compatible API (OpenAI, Groq, Gemini, Ollama...)
+#
+# Environment variables override any value here.
+# Use ${VAR_NAME} syntax to reference env vars (for secrets).
+
+# ─ Primary backend ─
+# This is used for all inference requests.
+# Change "type" to switch the entire inference engine.
+
+primary_backend:
+  type: huggingface
+  model_name: Qwen/Qwen2-1.5B-Instruct   # existing sugar-ai default
+  device: cpu
+  torch_dtype: float32
+  max_context: 2048
+  system_prompt: >
+    You are a helpful, friendly AI assistant for children using the Sugar
+    learning platform. Keep your answers short, simple, and encouraging.
+    Never produce harmful, violent, or inappropriate content.
+
+
+# ─ Fallback backends ─
+# Tried in order if the primary backend fails or is unavailable.
+# Remove or comment out any you do not need.
+
+fallback_backends:
+
+  # Groq: extremely fast inference, free tier available
+  # Get key at: https://console.groq.com
+  - type: openai_compat
+    provider: groq
+    api_key: ${GROQ_API_KEY}
+    model_name: llama-3.1-8b-instant
+
+  # Google Gemini: free tier, good multilingual support
+  # Get key at: https://aistudio.google.com/apikey
+  - type: openai_compat
+    provider: gemini
+    api_key: ${GEMINI_API_KEY}
+    model_name: gemini-2.0-flash
+
+  # Ollama: local models, no API key needed
+  # Install at: https://ollama.com
+  - type: openai_compat
+    provider: ollama
+    model_name: llama3
+
+  # ONNX Runtime: works on XO hardware, no C++ compilation
+  # Download: huggingface-cli download microsoft/Phi-3-mini-4k-instruct-onnx
+  # - type: onnx
+  #   model_path: ./models/phi3-onnx/model.onnx
+  #   tokenizer_path: ./models/phi3-onnx
+
+  # Existing GGUF model (llama-cpp-python)
+  # - type: llamacpp
+  #   model_path: ./LlaMA-135-Claude-RUN2-q4.gguf
+  #   n_ctx: 2048
+  #   n_threads: 1
+
+
+# ─ Global settings ─
+
+# Maximum tokens kept in conversation history per request
+max_history_tokens: 1500
+
+# Maximum tokens the model generates per response
+token_budget_per_request: 512
+
+# Run profanity filter on model output
+profanity_check: true
+
+
+# ─ Provider reference ─
+#
+# To use OpenAI directly:
+#   type: openai_compat
+#   provider: openai
+#   api_key: ${OPENAI_API_KEY}
+#   model_name: gpt-4o-mini
+#
+# To use Anthropic Claude:
+#   type: openai_compat
+#   provider: anthropic
+#   api_key: ${ANTHROPIC_API_KEY}
+#   model_name: claude-3-haiku-20240307
+#
+# To use Together AI:
+#   type: openai_compat
+#   provider: together
+#   api_key: ${TOGETHER_API_KEY}
+#   model_name: meta-llama/Llama-3-8b-chat-hf
+#
+# To use SmolLM2 (very lightweight, good for XO):
+#   type: huggingface
+#   model_name: HuggingFaceTB/SmolLM2-1.7B-Instruct
+#   device: cpu
