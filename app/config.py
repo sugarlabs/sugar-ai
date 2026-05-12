@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     MODEL_CHANGE_PASSWORD: str = ""
     DOC_PATHS: List[str] = Field(default_factory=list)
     MAX_DAILY_REQUESTS: int = 100
+    CONTEXT_WINDOW: int = 4096
+    MAX_OUTPUT_TOKENS: int = 1024
 
     # OAuth
     github_client_id: Optional[str] = None

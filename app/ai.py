@@ -13,6 +13,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from typing import Optional, List
 import app.prompts as prompts
 from app.config import settings
+from app.context import ContextManager, ModelMetadata
 import logging
 logger = logging.getLogger("sugar-ai")
 
@@ -119,6 +120,14 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+        self.ctx = ContextManager(
+            metadata=ModelMetadata(
+                model_name=self.model_name,
+                context_window=settings.CONTEXT_WINDOW,
+                max_output_tokens=settings.MAX_OUTPUT_TOKENS,
+            ),
+            count_tokens=lambda text: len(self.model.tokenizer.encode(text)),
+        )
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
@@ -241,47 +250,46 @@ class RAGAgent:
         final_response = second_chain.invoke(first_response)
         return final_response
 
-    def run_with_custom_prompt(self, question: str, custom_prompt: str, 
-                             max_length: int = 1024, truncation: bool = True,
+    def run_with_custom_prompt(self, question: str, custom_prompt: str,
+                             truncation: bool = True,
                              repetition_penalty: float = 1.1, temperature: float = 0.7,
                              top_p: float = 0.9, top_k: int = 50) -> str:
-        """Process a question with custom prompt and generation parameters (no RAG)"""
-        
-        # Combine custom prompt with question
+        """Process a question with custom prompt and generation parameters (no RAG)."""
         full_prompt = f"{custom_prompt}\n\nQuestion: {question}\nAnswer:"
-        
-        # Generate response with custom parameters
+
+        if not self.ctx.fits_in_budget(full_prompt):
+            logger.warning(
+                "run_with_custom_prompt: prompt exceeds safe_input_budget (%d tokens). "
+                "Proceeding with HF truncation as fallback.",
+                self.ctx.metadata.safe_input_budget,
+            )
+
         try:
             response = self.model(
                 full_prompt,
-                max_length=max_length,
+                max_new_tokens=self.ctx.metadata.max_output_tokens,
                 truncation=truncation,
                 repetition_penalty=repetition_penalty,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
-                do_sample=True if temperature > 0 else False,
+                do_sample=temperature > 0,
                 pad_token_id=self.model.tokenizer.eos_token_id,
             )
-            
-            # Extract the answer from the generated text
+
             generated_text = response[0]['generated_text']
-            
-            # Remove the original prompt from the response
+
             if "Answer:" in generated_text:
                 answer = generated_text.split("Answer:")[-1].strip()
             else:
-                # Fallback: remove the input prompt
                 answer = generated_text.replace(full_prompt, "").strip()
-            
-            # Stop at double newlines - this is our main stopping condition, else model continues with generating next user input, which we don't want
+
+            # Stop at first double newline — prevents model from continuing as next user turn.
             if "\n\n" in answer:
-                # Find the first occurrence of double newlines and cut there
-                double_newline_pos = answer.find("\n\n")
-                answer = answer[:double_newline_pos].strip()
-            
+                answer = answer[:answer.find("\n\n")].strip()
+
             return answer
-            
+
         except Exception as e:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
 
@@ -354,47 +362,58 @@ class RAGAgent:
         return answer
 
 
-    def run_chat_completion(self, messages: list, 
-                        max_length: int = 1024, truncation: bool = True,
+    def run_chat_completion(self, messages: list,
+                        truncation: bool = True,
                         repetition_penalty: float = 1.1, temperature: float = 0.7,
                         top_p: float = 0.9, top_k: int = 50) -> str:
         """
         Process chat messages with chat template format and generation parameters.
-        """
 
-        # Normalize messages and build prompt using tokenizer's chat template
-        chat = self._normalize_chat_messages(messages)
+        Before calling the model, trims oldest non-system turns so the full
+        prompt fits within the configured context window.
+        """
+        # Separate system messages to measure their token cost independently.
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        user_msgs   = [m for m in messages if m.get("role") == "user"]
+
+        system_tokens  = sum(self.ctx.count_tokens(m.get("content", "")) for m in system_msgs)
+        new_user_tokens = self.ctx.count_tokens(user_msgs[-1].get("content", "")) if user_msgs else 0
+
+        trimmed = self.ctx.trim_chat_history(
+            messages,
+            system_tokens=system_tokens,
+            new_user_tokens=new_user_tokens,
+        )
+
+        chat = self._normalize_chat_messages(trimmed)
         full_prompt = self.model.tokenizer.apply_chat_template(
             chat,
             tokenize=False,
             add_generation_prompt=True,
         )
 
-        # Generate response with custom parameters
         try:
             response = self.model(
                 full_prompt,
-                max_length=max_length,
+                max_new_tokens=self.ctx.metadata.max_output_tokens,
                 truncation=truncation,
                 repetition_penalty=repetition_penalty,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
-                do_sample=True if temperature > 0 else False,
+                do_sample=temperature > 0,
                 pad_token_id=self.model.tokenizer.eos_token_id,
             )
-            
-            # Extract the answer from the generated text
+
             generated_text = response[0]['generated_text']
-            
-            # Extract only the new model response
+
             answer = self._extract_after_prompt(
                 generated_text,
                 full_prompt,
                 getattr(self.model.tokenizer, "eos_token", None),
             )
-            
+
             return answer
-            
+
         except Exception as e:
             raise Exception(f"Error generating chat completion: {str(e)}")

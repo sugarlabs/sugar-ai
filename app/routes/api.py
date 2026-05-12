@@ -26,7 +26,6 @@ class PromptedLLMRequest(BaseModel):
     question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
     custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
     messages: Optional[List[ChatMessage]] = Field(None, description="List of chat messages (required if chat=True)")
-    max_length: int = Field(1024, description="Maximum length of generated text")
     truncation: bool = Field(True, description="Whether to truncate input if too long")
     repetition_penalty: float = Field(1.1, description="Repetition penalty")
     temperature: float = Field(0.7, description="Temperature for sampling")
@@ -187,7 +186,6 @@ async def ask_llm_prompted(
             # Call the agent's chat completion function
             answer = agent.run_chat_completion(
                 messages=messages_dict,
-                max_length=request_data.max_length,
                 truncation=request_data.truncation,
                 repetition_penalty=request_data.repetition_penalty,
                 temperature=request_data.temperature,
@@ -211,7 +209,6 @@ async def ask_llm_prompted(
                 "user": user_info["name"],
                 "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
                 "generation_params": {
-                    "max_length": request_data.max_length,
                     "truncation": request_data.truncation,
                     "repetition_penalty": request_data.repetition_penalty,
                     "temperature": request_data.temperature,
@@ -230,7 +227,6 @@ async def ask_llm_prompted(
             answer = agent.run_with_custom_prompt(
                 question=request_data.question,
                 custom_prompt=request_data.custom_prompt,
-                max_length=request_data.max_length,
                 truncation=request_data.truncation,
                 repetition_penalty=request_data.repetition_penalty,
                 temperature=request_data.temperature,
@@ -246,7 +242,6 @@ async def ask_llm_prompted(
                 "user": user_info["name"],
                 "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
                 "generation_params": {
-                    "max_length": request_data.max_length,
                     "truncation": request_data.truncation,
                     "repetition_penalty": request_data.repetition_penalty,
                     "temperature": request_data.temperature,
@@ -326,3 +321,15 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+
+
+@router.get("/model-info")
+async def model_info(user_info: dict = Depends(verify_api_key)):
+    """Return active model metadata including context window and token budgets."""
+    meta = agent.ctx.metadata
+    return {
+        "model_name": meta.model_name,
+        "context_window": meta.context_window,
+        "max_output_tokens": meta.max_output_tokens,
+        "safe_input_budget": meta.safe_input_budget,
+    }
