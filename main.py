@@ -17,7 +17,8 @@
 """
 Main entry point for Sugar-AI application.
 """
-
+from pydantic import BaseModel
+from fastapi import HTTPException
 import uvicorn
 import logging
 from sqlalchemy.orm import Session
@@ -56,6 +57,27 @@ async def startup_event():
     
     app.state.agent = initialized_agent
 
+
+class ModelChangeRequest(BaseModel):
+    model_name: str
+
+@app.post("/change-model")
+async def change_model(request: ModelChangeRequest):
+    try:
+        global agent
+        # Re-initialize the agent with the new model (e.g., 'openai/gpt-4')
+        new_agent = RAGAgent(model=request.model_name)
+        if settings.DOC_PATHS:
+            new_agent.setup_vectorstore(settings.DOC_PATHS)
+        
+        # Update the global references used by the API
+        from app.routes import api
+        api.agent = new_agent
+        app.state.agent = new_agent
+        
+        return {"status": "success", "active_model": request.model_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
