@@ -119,6 +119,8 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+        self.last_query: Optional[str] = None
+        self.last_response: Optional[str] = None
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
@@ -205,22 +207,29 @@ class RAGAgent:
 
     def run(self, question: str) -> str:
         """Process a question through the RAG pipeline"""
+
+    #  CACHE CHECK
+        if question == self.last_query and self.last_response is not None:
+            logger.info("Cache hit for query")
+            return self.last_response
+
         # build chain components
         chain_input = {
             "context": self.retriever | format_docs,
             "question": RunnablePassthrough()
         }
-        
-        # first chain: prompt -> combine messages -> model -> extract answer
+
+        # first chain
         first_chain = (
-            chain_input
-            | self.prompt
-            | combine_messages
-            | self.model
-            | extract_answer_from_output
+        chain_input
+        | self.prompt
+        | combine_messages
+        | self.model
+        | extract_answer_from_output
         )
-        
+
         doc_result, _ = self.get_relevant_document(question)
+
         if doc_result:
             first_response = first_chain.invoke({
                 "query": question,
@@ -229,7 +238,7 @@ class RAGAgent:
         else:
             first_response = first_chain.invoke(question)
 
-        # second chain for making answer child-friendly
+        # second chain
         second_chain = (
             {"original_answer": lambda x: x}
             | self.child_prompt
@@ -237,8 +246,13 @@ class RAGAgent:
             | self.simplify_model
             | extract_answer_from_output
         )
-        
+
         final_response = second_chain.invoke(first_response)
+
+        # SAVE TO CACHE
+        self.last_query = question
+        self.last_response = final_response
+
         return final_response
 
     def run_with_custom_prompt(self, question: str, custom_prompt: str, 
