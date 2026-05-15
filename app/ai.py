@@ -207,7 +207,7 @@ class RAGAgent:
         """Process a question through the RAG pipeline"""
         # build chain components
         chain_input = {
-            "context": self.retriever | format_docs,
+            "context": RunnablePassthrough(),
             "question": RunnablePassthrough()
         }
         
@@ -219,15 +219,14 @@ class RAGAgent:
             | self.model
             | extract_answer_from_output
         )
-        
+
         doc_result, _ = self.get_relevant_document(question)
-        if doc_result:
-            first_response = first_chain.invoke({
-                "query": question,
-                "context": doc_result.page_content
-            })
-        else:
-            first_response = first_chain.invoke(question)
+        context_text = doc_result.page_content if doc_result else ""
+
+        first_response = first_chain.invoke({
+            "question": question,
+            "context": context_text
+        })
 
         # second chain for making answer child-friendly
         second_chain = (
