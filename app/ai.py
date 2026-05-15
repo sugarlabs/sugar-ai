@@ -85,32 +85,11 @@ class RAGAgent:
                 torch_dtype=torch.float16,
                 device_map="auto"
             )
-            self.model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
-            
-            self.simplify_model = pipeline(
-                "text-generation",
-                model=model_obj,
-                tokenizer=tokenizer,
-                max_new_tokens=1024,
-                truncation=True,
-            )
+            self.model = None
+            self.simplify_model = None
         else:
-            self.model = pipeline(
-                "text-generation",
-                model=self.model_name,
-                max_new_tokens=1024,
-                truncation=True,
-                torch_dtype=dtype, # Use the dynamic dtype
-                device=device,     # Use the dynamic device
-            )
-
-            self.simplify_model = self.model
+            self.model = None
+            self.simplify_model = None
 
         self.retriever: Optional[FAISS] = None
         self.prompt = ChatPromptTemplate.from_template(prompts.PROMPT_TEMPLATE)
@@ -119,7 +98,53 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+    def load_model(self):
+        """Load model only when needed (keeps original behavior)"""
+        if self.model is not None:
+           return
 
+        logger.info("Lazy loading model...")
+
+        device = 0 if torch.cuda.is_available() and not getattr(settings, "DEV_MODE", False) else -1
+        dtype = torch.float16 if device == 0 else torch.float32
+
+        if self.use_quant:
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
+  
+            tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            model_obj = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                quantization_config=bnb_config,
+                torch_dtype=torch.float16,
+                device_map="auto"
+            )
+
+            self.model = pipeline(
+                "text-generation",
+                model=model_obj,
+                tokenizer=tokenizer,
+                max_new_tokens=1024,
+                truncation=True,
+            )
+
+            self.simplify_model = self.model
+
+        else:
+            self.model = pipeline(
+                "text-generation",
+                model=self.model_name,
+                max_new_tokens=1024,
+                truncation=True,
+                torch_dtype=dtype,
+                device=device,
+            )
+
+            self.simplify_model = self.model
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
         self.model_name = model
@@ -205,6 +230,12 @@ class RAGAgent:
 
     def run(self, question: str) -> str:
         """Process a question through the RAG pipeline"""
+        self.load_model()
+        if not self.retriever:
+            # No RAG → fallback to pure LLM
+            prompt = f"Question: {question}\nAnswer:"
+            response = self.model(prompt)
+            return extract_answer_from_output(response)
         # build chain components
         chain_input = {
             "context": self.retriever | format_docs,
@@ -398,3 +429,17 @@ class RAGAgent:
             
         except Exception as e:
             raise Exception(f"Error generating chat completion: {str(e)}")
+    
+    def run_rag_only(self, question: str) -> str:
+        """Return response using only retrieved documents (no LLM)"""
+        if not self.retriever:
+           return "No documents available for retrieval."
+
+        docs = self.retriever.invoke(question)
+
+        if not docs:
+           return "No relevant documents found."
+
+        context = "\n\n".join([doc.page_content for doc in docs[:3]])
+
+        return f"(Offline Mode)\n\nBased on retrieved documents:\n{context}"

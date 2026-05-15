@@ -15,6 +15,8 @@ from app.database import get_db, APIKey
 from app.ai import RAGAgent, extract_answer_from_output
 from app.config import settings
 
+OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() == "true"
+
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
     role: str  # "system", "user", "assistant" 
@@ -39,7 +41,7 @@ router = APIRouter(tags=["api"])
 logger = logging.getLogger("sugar-ai")
 
 # Initialize the agent
-agent = None
+agent = RAGAgent()
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
@@ -92,8 +94,12 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        answer = agent.run(question)
-        
+        if OFFLINE_MODE:
+           answer = agent.run_rag_only(question)
+           mode = "offline"
+        else:
+           answer = agent.run(question)
+           mode = "llm"
         # log completion
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
@@ -111,6 +117,7 @@ async def ask_question(
         return {
             "answer": answer, 
             "user": user_info["name"],
+            "mode": mode,
             "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
         }
     except Exception as e:
@@ -130,6 +137,7 @@ async def ask_llm(
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
+        agent.load_model()
         response = agent.model(question)
         answer = extract_answer_from_output(response)
         
@@ -184,6 +192,7 @@ async def ask_llm_prompted(
             # Convert Pydantic messages to dict format for the agent function
             messages_dict = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
             
+            agent.load_model()
             # Call the agent's chat completion function
             answer = agent.run_chat_completion(
                 messages=messages_dict,
@@ -227,6 +236,7 @@ async def ask_llm_prompted(
             logger.info(f"REQUEST - /ask-llm-prompted - User: {user_info['name']} - IP: {client_ip} - Question: {request_data.question[:200]}...")
             logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
             
+            agent.load_model()
             answer = agent.run_with_custom_prompt(
                 question=request_data.question,
                 custom_prompt=request_data.custom_prompt,
@@ -275,6 +285,7 @@ async def debug(
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     
     try:
+        agent.load_model()
         response = agent.debug(code, context)
         answer = response
         
