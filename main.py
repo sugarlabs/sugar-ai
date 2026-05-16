@@ -35,11 +35,21 @@ logger = logging.getLogger("sugar-ai")
 
 app = create_app()
 
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize data on app startup"""
+
+    # DB initialization
     db = next(get_db())
     sync_env_keys_to_db(db)
+
+    from app.database import create_tables
+
+    create_tables()
+    logger.info(" Database tables created/verified (including token_usage)")
+
+    # Model selection
     if settings.DEV_MODE:
         active_model = settings.DEV_MODEL_NAME
         logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
@@ -47,13 +57,33 @@ async def startup_event():
         active_model = settings.PROD_MODEL_NAME
         logger.info(f"PRODUCTION mode. Loading full model: {active_model}")
 
+    # Initialize RAG agent
     initialized_agent = RAGAgent(model=active_model)
-    initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
 
-    # Inject this instance into the API module
-    # This updates the 'agent = None' in api.py to be the real loaded model
+    # Setup vector store
+    if settings.DOC_PATHS:
+        initialized_agent.setup_vectorstore(settings.DOC_PATHS)
+        logger.info(" Vector store initialized")
+
+    # TOKEN TRACKER INTEGRATION
+    try:
+        import tiktoken
+        from app.token_tracker import TokenTracker
+
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+
+        initialized_agent.token_tracker = TokenTracker(
+            model_name=active_model, tokenizer=tokenizer
+        )
+
+        logger.info("Token tracker initialized")
+
+    except Exception as e:
+        initialized_agent.token_tracker = None
+        logger.warning(f"Token tracker not initialized: {e}")
+
+    # Inject into API layer
     api.agent = initialized_agent
-    
     app.state.agent = initialized_agent
 
 
@@ -61,4 +91,3 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     logger.info(f"Starting Sugar-AI on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
-
