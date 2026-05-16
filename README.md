@@ -280,7 +280,9 @@ The response will include the user name:
 Users with `can_change_model: true` permission can change the model:
 
 ```sh
-curl -X POST "http://localhost:8000/change-model?model=Qwen/Qwen2-1.5B-Instruct&api_key=sugarai2024&password=sugarai2024"
+curl -X POST "http://localhost:8000/change-model" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "Qwen/Qwen2-1.5B-Instruct", "api_key": "sugarai2024", "password": "sugarai2024"}'
 ```
 
 #### Why User Names Are Useful

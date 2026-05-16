@@ -511,15 +511,14 @@ Content-Type: application/json</pre>
     <div class="endpoint admin-only">
       <h3>Change Model (Admin Only)</h3>
       <div class="endpoint-method">POST</div>
-      <div class="endpoint-url">/change-model?model={model_name}&api_key={admin_key}&password={admin_password}</div>
+      <div class="endpoint-url">/change-model</div>
       <p>Change the LLM model being used for responses. Requires admin API key and password.</p>
-      
+
       <div class="endpoint-details">
         <h4>Example Request:</h4>
-        <pre>curl -X POST "http://localhost:8000/change-model?model=Qwen/Qwen2-1.5B-Instruct&api_key=admin_key&password=admin_password"</pre>
-        
-       
-        </ul>
+        <pre>curl -X POST "http://localhost:8000/change-model" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "Qwen/Qwen2-1.5B-Instruct", "api_key": "admin_key", "password": "admin_password"}'</pre>
       </div>
     </div>
   </div>

@@ -1,7 +1,7 @@
 """
 API routes for Sugar-AI.
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 import time
@@ -32,6 +32,12 @@ class PromptedLLMRequest(BaseModel):
     temperature: float = Field(0.7, description="Temperature for sampling")
     top_p: float = Field(0.9, description="Top-p (nucleus) sampling parameter")
     top_k: int = Field(50, description="Top-k sampling parameter")
+
+class ChangeModelRequest(BaseModel):
+    """Request model for change-model endpoint"""
+    model: str = Field(..., min_length=1, description="HuggingFace model identifier to switch to")
+    api_key: str = Field(..., min_length=1, description="API key for authentication")
+    password: str = Field(..., min_length=1, description="Admin password for model changes")
 
 router = APIRouter(tags=["api"])
 
@@ -297,32 +303,30 @@ async def debug(
 
 @router.post("/change-model")
 async def change_model(
-    model: str, 
-    api_key: str = Query(...), 
-    password: str = Query(...), 
+    request_data: ChangeModelRequest,
     request: Request = None
 ):
     """Change the model used by the RAG agent (admin only)"""
     client_ip = request.client.host if request else "unknown"
-    logger.info(f"REQUEST - /change-model - API Key: {api_key[:5]}... - IP: {client_ip} - Model: {model}")
-    
-    if api_key not in settings.API_KEYS:
-        logger.warning(f"Invalid API key used for model change: {api_key[:5]}... from {client_ip}")
+    logger.info(f"REQUEST - /change-model - API Key: {request_data.api_key[:5]}... - IP: {client_ip} - Model: {request_data.model}")
+
+    if request_data.api_key not in settings.API_KEYS:
+        logger.warning(f"Invalid API key used for model change: {request_data.api_key[:5]}... from {client_ip}")
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
-    user_info = settings.API_KEYS[api_key]
+
+    user_info = settings.API_KEYS[request_data.api_key]
     if not user_info.get("can_change_model", False):
         logger.warning(f"Unauthorized model change attempt by: {user_info['name']} from {client_ip}")
         raise HTTPException(status_code=403, detail="User doesn't have permission to change model")
-    
-    if password != settings.MODEL_CHANGE_PASSWORD:
+
+    if request_data.password != settings.MODEL_CHANGE_PASSWORD:
         logger.warning(f"Invalid password for model change by: {user_info['name']} from {client_ip}")
         raise HTTPException(status_code=403, detail="Invalid model change password")
-    
+
     try:
-        agent.set_model(model)
-        logger.info(f"Model changed to {model} by {user_info['name']}")
-        return {"message": f"Model changed to {model}", "user": user_info["name"]}
+        agent.set_model(request_data.model)
+        logger.info(f"Model changed to {request_data.model} by {user_info['name']}")
+        return {"message": f"Model changed to {request_data.model}", "user": user_info["name"]}
     except Exception as e:
-        logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
+        logger.error(f"Error changing model to {request_data.model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
