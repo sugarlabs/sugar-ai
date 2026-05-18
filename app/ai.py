@@ -223,7 +223,7 @@ class RAGAgent:
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
             first_response = first_chain.invoke({
-                "query": question,
+                "question": question,
                 "context": doc_result.page_content
             })
         else:
