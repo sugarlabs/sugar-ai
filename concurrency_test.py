@@ -1,12 +1,15 @@
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple
 import urllib.request
 import urllib.error
 
-BASE_URL = "http://127.0.0.1:8000"
-API_KEY = "user_key_1"
-WORKERS = 20
+__test__ = False
+
+BASE_URL = os.getenv("CONCURRENCY_TEST_BASE_URL", "http://127.0.0.1:8000")
+API_KEY = os.getenv("CONCURRENCY_TEST_API_KEY", "user_key_1")
+WORKERS = int(os.getenv("CONCURRENCY_TEST_WORKERS", "20"))
 
 
 def make_request() -> Tuple[int, str]:
