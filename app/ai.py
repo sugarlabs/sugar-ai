@@ -135,15 +135,30 @@ class RAGAgent:
 
     def setup_vectorstore(self, file_paths: List[str]) -> Optional[FAISS]:
         """Load documents and create a vector store for retrieval"""
+        if not file_paths:
+            logger.warning("DOC_PATHS is empty. RAG retriever will remain unconfigured.")
+            self.retriever = None
+            return None
+
         all_documents = []
         for file_path in file_paths:
             if os.path.exists(file_path):
-                if file_path.endswith(".pdf"):
-                    loader = PyMuPDFLoader(file_path)
-                else:
-                    loader = TextLoader(file_path)
-                documents = loader.load()
-                all_documents.extend(documents)
+                try:
+                    if file_path.endswith(".pdf"):
+                        loader = PyMuPDFLoader(file_path)
+                    else:
+                        loader = TextLoader(file_path)
+                    documents = loader.load()
+                    all_documents.extend(documents)
+                except Exception as e:
+                    logger.warning(f"Failed to load document '{file_path}': {e}")
+            else:
+                logger.warning(f"Document path does not exist: {file_path}")
+
+        if not all_documents:
+            logger.warning("No documents were loaded from DOC_PATHS. RAG retriever will remain unconfigured.")
+            self.retriever = None
+            return None
         
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -155,6 +170,9 @@ class RAGAgent:
 
     def get_relevant_document(self, query: str, threshold: float = 0.5):
         """Get the most relevant document for a query"""
+        if not self.retriever:
+            return None, 0.0
+
         results = self.retriever.invoke(query)
         if results:
             top_result = results[0]
@@ -205,29 +223,38 @@ class RAGAgent:
 
     def run(self, question: str) -> str:
         """Process a question through the RAG pipeline"""
-        # build chain components
-        chain_input = {
-            "context": self.retriever | format_docs,
-            "question": RunnablePassthrough()
-        }
-        
-        # first chain: prompt -> combine messages -> model -> extract answer
-        first_chain = (
-            chain_input
-            | self.prompt
-            | combine_messages
-            | self.model
-            | extract_answer_from_output
-        )
-        
-        doc_result, _ = self.get_relevant_document(question)
-        if doc_result:
-            first_response = first_chain.invoke({
-                "query": question,
-                "context": doc_result.page_content
-            })
+        if not self.retriever:
+            first_chain = (
+                self.prompt
+                | combine_messages
+                | self.model
+                | extract_answer_from_output
+            )
+            first_response = first_chain.invoke({"context": "", "question": question})
         else:
-            first_response = first_chain.invoke(question)
+            # build chain components
+            chain_input = {
+                "context": self.retriever | format_docs,
+                "question": RunnablePassthrough()
+            }
+
+            # first chain: prompt -> combine messages -> model -> extract answer
+            first_chain = (
+                chain_input
+                | self.prompt
+                | combine_messages
+                | self.model
+                | extract_answer_from_output
+            )
+
+            doc_result, _ = self.get_relevant_document(question)
+            if doc_result:
+                first_response = first_chain.invoke({
+                    "query": question,
+                    "context": doc_result.page_content
+                })
+            else:
+                first_response = first_chain.invoke(question)
 
         # second chain for making answer child-friendly
         second_chain = (
