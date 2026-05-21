@@ -1,0 +1,444 @@
+# Fetched from https://raw.githubusercontent.com/sugarlabs/sugar-docs/master/src/contributing.md on 2026-03-22T01:41:26.535286
+
+Contributing
+
+This is our guide to contributing code.  In brief, you will:
+
+* select a Sugar Labs software product, i.e. Sugarizer, Sugar, Music
+  Blocks, or one of the hundreds of learning activities,
+* use the software, so that you know from direct experience what to
+  change,
+* find a problem that interests you,
+  * make a pull request, if you can fix it, see [Workflow](#workflow), 
+  * add an issue, but only if you cannot or will not fix the problem,
+* look at other issues and see if you can help,
+* review other pull requests, see [Guide for Reviewers](#guide-for-reviewers)
+
+Make your own decision on what to do.
+
+Do not ask permission to work.
+
+Modifying Activities
+
+Most activity repositories can be found in our [GitHub `sugarlabs`
+organization](https://github.com/sugarlabs).
+
+A few activity repositories are somewhere else; to find them read the
+`activity/activity.info` file, check the metadata on the
+[activities.sugarlabs.org app
+store](https://activities.sugarlabs.org/), or the [Activity page on
+wiki.sugarlabs.org](https://wiki.sugarlabs.org/go/Activity), or our
+deprecated [gitorious instance](https://git.sugarlabs.org/).
+
+For new activities, see [Write your own Sugar desktop
+activity](desktop-activity.md), or [Write your own Sugar web
+activity](web-activity.md), then make a new repository in your
+GitHub account, put the source code in it, then ask the [systems@
+list](https://lists.sugarlabs.org/listinfo/systems) to move it to the
+GitHub `sugarlabs` organization.
+
+Checklist - everyone
+
+* [ ] run the activity and confirm that you understand what it is for, what it does, and how a child will use it,
+
+* [ ] make a fork and clone it,
+
+* [ ] check if what you want to change is available already in any other branches or forks,
+
+* [ ] make and [test](#testing) your changes,
+
+* [ ] if your changes add a new feature or will affect users; update the NEWS file, the README.md file, and the help-activity,
+
+* [ ] if there is a `po/*.pot` file, and your changes affect translated strings; regenerate using `python setup.py genpot`,
+
+* [ ] make a branch, one or more commits, and a pull request, see [Workflow](#workflow) below.
+
+After modifying an activity, a new release will be needed.  Some activities have no maintainer, so you may need to be the maintainer for a short time.
+
+Checklist - maintainer
+
+* [ ] for Python 2 branches, check version of latest bundle release in
+  [activities.sugarlabs.org](https://activities.sugarlabs.org/),
+
+* [ ] check version of latest tarball release in [download.sugarlabs.org/sources/sucrose/fructose/](https://download.sugarlabs.org/sources/sucrose/fructose/) or [download.sugarlabs.org/sources/honey/](https://download.sugarlabs.org/sources/honey/),
+
+* [ ] check for a release version git tag, e.g. v34,
+
+* [ ] correlate with `activity_version` metadata in `activity/activity.info`,
+
+* [ ] look for commits _after_ any of these, in either;
+
+    * [ ] master branch of repository at sugarlabs,
+    * [ ] any other branches,
+    * [ ] any other forks,
+    * [ ] orphaned repositories with the same `bundle_id` value, using GitHub or Google Search,
+    * [ ] deprecated repositories at git.sugarlabs.org,
+
+* [ ] review and merge all pull requests,
+
+* [ ] apply all desired commits, making pull requests if review is needed,
+
+* [ ] apply any [translate.sugarlabs.org](https://translate.sugarlabs.org) changes, e.g. using a [download script](https://github.com/sugarlabs/sugar-tools/blob/master/activity-translations),
+
+* [ ] if there is a `po/*.pot` file, regenerate using `python setup.py genpot`, review the changes, and commit,
+
+* [ ] If the activity is on [weblate](weblate.sugarlabs.org), check to make sure that the changes on weblate are also on the repo
+as weblate automatically pushes changes, you can ask for the admin in our matrix channel if you notice that weblate changes aren't
+reflected on the repo.
+
+* [ ] update the README.md file if necessary,
+
+* [ ] write release notes for the NEWS file, change the `activity_version` metadata in `activity/activity.info`, commit, and `git tag` the version,
+
+* [ ] update the activity documentation in the help-activity repository,
+
+* [ ] for activities that include a tarball release, or where Fedora or Debian packages may be made, create a tarball using `python setup.py dist_source`, and upload tarball to download.sugarlabs.org using shell account,
+
+* [ ] create bundle using `python setup.py dist_xo`, and test that it
+  can be installed by Browse,
+
+* [ ] for Python 2 branches only, upload to activities.sugarlabs.org
+  using developer account,
+
+* [ ] rebase any other maintained branches or pull requests, such as
+  those for past or future versions of Python, or past releases of
+  Fedora, Ubuntu or libraries.
+
+* [ ] for Python 3 Activities, copy the bundle to `~activities-v4/bundles`, 
+  remove any other old versions of the bundle from `~activities-v4/bundles`, and trigger
+  a rebuild of the static site using `rebuild-aslo` command, verify if your bundle is
+  visible on https://v4.activities.sugarlabs.org . For more information, it is
+  recommended to take a look at the   [Activities4 wiki page](https://wiki.sugarlabs.org/go/Service/activities4)
+
+Modifying Sugar
+
+Sugar repositories can be found in our [GitHub `sugarlabs`
+organization](https://github.com/sugarlabs).  Sugar desktop
+environment repositories are:
+
+* https://github.com/sugarlabs/sugar (the desktop shell);
+* https://github.com/sugarlabs/sugar-artwork (images, icons, themes);
+* https://github.com/sugarlabs/sugar-toolkit-gtk4 (graphical widget library); and,
+* https://github.com/sugarlabs/sugar-datastore (journal backend).
+
+Workflow
+
+We use a pull-request workflow, see [GitHub's help on pull-request](https://help.github.com/articles/using-pull-requests).  In brief, you will:
+
+* find and fork the source repository, see [Forking](#forking) below,
+* on your computer, clone your fork repository, see [Cloning](#cloning),
+* commit your changes in a new branch, see [Branching](#branching) and [Making Commits](#making-commits),
+* push your branch and submit a pull-request for it, and;
+* respond to review until your pull-request is merged or the problem is solved in another way.
+
+Forking
+
+You must first fork a repository on GitHub.
+This step is needed only once for each repository.
+See [complete help in GitHub](https://help.github.com/articles/fork-a-repo).
+
+Cloning
+
+You must clone your fork.
+This step is needed only once for each repository.
+Using [sugar](https://github.com/sugarlabs/sugar) as example;
+
+```
+git clone git@github.com:YOUR-NAME/sugar.git
+cd sugar
+git remote add upstream https://github.com/sugarlabs/sugar.git
+git fetch upstream
+```
+
+Branching
+
+Create a branch per set of changes; e.g. to fix a problem or add a feature;
+
+```
+git checkout -b BRANCH-NAME
+```
+
+Your BRANCH-NAME can be anything, other than master.  The scope is your forked repository.  The branch name will be shown on pull-requests.
+
+Making commits
+
+Change files, and commit.  Commit messages are kept by git, and are used later when problems are being solved.  When writing a commit message;
+
+1. start with a one line summary of the change;
+2. leave a blank line after the summary;
+3. explain the problem that is solved, unless the summary makes it obvious;
+4. when the problem was introduced by a previous commit, mention the hash;
+5. when the problem is in an issue or ticket, add "Fixes #1234";
+6. avoid mentioning GitHub or other pull-requests, as these are not kept in git;
+7. avoid mentioning any contest tasks or mentors; use pull-request comments instead; and
+8. use imperative mood, like "add foo", or "port to bar"; (if English is not your first language, see [imperative mood](https://en.wikipedia.org/wiki/Imperative_mood), [git documentation](https://git.kernel.org/pub/scm/git/git.git/tree/Documentation/SubmittingPatches#n133) and [blog post by Dan Clarke](https://www.danclarke.com/git-tense)).
+
+See additional guidance [How to Write a Git Commit Message](https://chris.beams.io/git-commit) from 2014.
+
+Make one or more commits.
+
+Pushing
+
+Push the branch to your repository;
+
+```
+git push origin BRANCH-NAME
+```
+
+Create a pull-request
+
+Send a pull-request for your branch.
+Navigate to your repository page in GitHub, switch to the branch you made, and then press the **Pull Request** button.
+
+When writing a pull-request message;
+
+1. if there is only one commit, begin with the GitHub default of the commit message, otherwise write a summary of the series of commits;
+2. link to any relevant pull-requests, issues, or tickets; and
+3. link to any contest tasks, and name your @mentors to subscribe them.
+
+A review will happen in the pull-request, and a reviewer will either;
+
+1. merge, squash, or rebase your commits;
+2. merge your commits with their own changes;
+3. ask you to make changes; or
+4. close and reject your pull-request giving reasons.
+
+When they ask you for changes, you may have to change both files, commits or commit messages.
+
+When squashing commits to different files, use interactive rebase.
+
+```
+git rebase -i master
+```
+
+After resolving any conflicts, push the changes to the same branch;
+
+```
+git push --force origin
+```
+
+Then respond on the pull-request.
+
+Keep your pull-request up to date
+
+When there have been upstream commits while your pull-request was open, you should rebase your pull-request;
+
+```
+git pull --rebase upstream
+```
+
+Then push the changes to the same branch;
+
+```
+git push --force origin
+```
+
+The pull-request will be updated.
+
+Keep your fork up to date
+
+When there have been upstream commits since your fork was made, you should bring these into your fork:
+
+```
+git checkout master
+git pull upstream
+git checkout BRANCH-NAME
+```
+
+Review
+
+We encourage [testing](#testing) before merging a pull-request.
+
+So instead of merging directly with the "merge" button on GitHub, we may do a local merge, then test, then push.
+
+See [GitHub help on merging a pull-request](https://help.github.com/articles/merging-a-pull-request).
+
+The GitHub page for the pull-request will provide you the right commands to do the local merge, similar to the following.
+
+Get the changes from that branch to a new local branch:
+
+```
+git checkout -b SOME-USER-topic1 master
+git pull https://github.com/SOME-USER/sugar.git topic1
+```
+
+[Test](#testing)! If everything is fine, merge:
+
+```
+git checkout master
+git rebase SOME-USER-topic1
+git push origin master
+```
+
+Close Issue
+
+Once your pull-request is merged, you should close any issue or ticket.  GitHub issues named as "Fixes" in a commit message may be automatically closed.
+
+Be sure to thank everyone who helped you out along the way.
+
+Testing
+-------
+
+When testing activities;
+
+* activity must start,
+
+* activity must refresh entire display when focus is restored,
+
+* activity must behave predictably (except where randomness is designed),
+
+* activity must save data to journal,
+
+* activity must restore the saved data from journal (click on the journal entry),
+
+* other activities must be able to use saved data, if it is declared with the relevant content type,
+
+* every coded feature should either work properly, or be removed if it cannot be fixed,
+
+* collaboration support, if present, must function properly between two or more systems,
+
+* activity should not consume all available battery power (e.g. pygame clock rate too high),
+
+* activity should not contain any security vulnerabilities,
+
+* activity should not reveal personal information.
+
+AI guidelines for Sugar Labs contributions
+
+Generative AI tools continue to evolved rapidly. They can be helpful
+in coding and they are being used to contribute code to our software
+repositories. As with using any tool, the code generated with AI is
+the responsibility of the contributor.
+
+We value good code, concise accurate documentation, and avoiding
+unneeded code churn. Discretion, good judgment, and critical thinking
+are the foundation of all good contributions, regardless of the tools
+used in their creation.
+
+You may use any tools that help you understand our software and write
+good code, including AI tools.  However, you must always understand
+and be able to explain the changes you're proposing to make, whether
+or not you used an LLM as part of your process to produce them. The
+answer to “Why is X an improvement?” should never be “I'm not
+sure. The AI did it.”
+
+Acceptable uses
+
+Some of the acceptable uses of generative AI include:
+
+* Assistance with writing comments, especially in a non-native language
+
+* Gaining understanding of existing code
+
+* Supplementing contributor knowledge for code, tests, and documentation
+
+Recommendations
+
+It is recommended that you:
+
+* Don't skip becoming familiar with the part of the codebase you're
+working on.  This will let you write better prompts and validate their
+output if you use an LLM.
+
+* Split up your changes into coherent commits, even if an LLM generates
+them all in one go.
+
+* Consider whether the change is necessary.
+
+* Make minimal, focused changes.
+
+* Follow existing coding style and patterns.
+
+* Write tests that exercise the change.
+
+Further considerations
+
+* Maintainers may close issues and PRs that are not useful or
+productive, including those that are fully generated by AI. If a
+contributor repeatedly opens unproductive issues or PRs, they may be
+blocked.
+
+* When writing a pull request description, do not include anything
+that's obvious from looking at your changes directly (e.g., files
+changed, functions updated, etc.). Instead, focus on the why behind
+your changes. Don't ask an LLM to generate a PR description on your
+behalf based on your code changes, as it will simply regurgitate the
+information that's already there.
+
+* Similarly, when responding to a pull request comment, explain your
+reasoning. Don't prompt an LLM to re-describe what can already be seen
+from the code.
+
+* Verify that everything you write is accurate, whether or not an LLM
+generated any part of it. Maintainers will be unable to review your
+contributions if you misrepresent your work (e.g., misdescribing your
+code changes, their effect, or your testing process).
+
+* Clarity and succinctness are much more important than perfect grammar,
+so you shouldn't feel obliged to pass your writing through an LLM. If
+you do ask an LLM to clean up your writing style, be sure it does not
+make it longer in the process. Demand succinctness in your prompt.
+
+Guide for Reviewers
+-------------------
+
+Goals
+
+Goals for review are to;
+
+* detect trivial mistakes,
+
+* maintain consistent and good code quality,
+
+* reproduce [test](#testing) results, (especially for critical repositories),
+
+* maintain a useful git commit history for use by git bisect, and developers who read it,
+
+* maintain other records, such as issues, tickets, and documentation,
+
+* not waste the time of the contributor, by doing anything trivial that otherwise the contributor might have to do.
+
+Checklist - review
+
+* [ ] does the change have consensus of the community, see also [code of conduct](CODE_OF_CONDUCT.md) (if a reviewer is in doubt, seek opinions by @mentioning people),
+
+* [ ] does the commit message explain the summary, problem, and solution, so that it can be used in future analysis, see also [making commits](#making-commits) (if a reviewer can fix it by squash or manual rebase, do so),
+
+* [ ] does the commit message reference any issue, bugs.sugarlabs.org ticket number, or downstream ticket numbers, (if a reviewer can fix it by squash or manual rebase, do so),
+
+* [ ] are the number of commits excessive for future analysis, (a reviewer may squash or rebase if necessary),
+
+* [ ] is the changed code consistent in style with the existing code, see also [coding standards](desktop-activity.md#coding-standards), (on the other hand, expect flake8 changes to be in separate commits),
+
+* [ ] for critical repositories, does the change work properly on our latest version of Sugar on either Fedora, Debian, or Ubuntu.
+
+Critical repositories
+
+- sugar, sugar-toolkit, sugar-toolkit-gtk3, sugar-artwork, sugar-datastore, gst-plugins-espeak,
+
+- each of the [Fructose](https://wiki.sugarlabs.org/go/Development_Team/Release/Modules#Fructose) activity set repositories,
+
+Frequently Asked Questions
+
+I've used the GitHub editor, how can I rebase or amend commits?
+
+Make a local clone of your GitHub repository, use `git commit --amend` or the other advanced CLI features, then `git push` back to GitHub.
+
+Error 403 on `git push`
+
+Most likely you have cloned someone else's repository, and you should
+instead fork their repository, clone your own repository, make your
+changes, then push.  See [Getting error 403 while submitting
+PR](http://lists.sugarlabs.org/archive/sugar-devel/2017-March/053926.html)
+and [D. Joe's
+reply](http://lists.sugarlabs.org/archive/sugar-devel/2017-March/053929.html).
+
+My fork is out of date. How do I sync it with upstream?
+
+See GitHub’s guide on syncing a fork:
+https://docs.github.com/en/get-started/quickstart/fork-a-repo#syncing-a-fork
+
+Where can I ask questions or get help from the community?
+
+Join the Sugar Labs community chat or mailing lists:
+https://matrix.to/#/#sugar:matrix.org

@@ -141,9 +141,17 @@ class RAGAgent:
                 if file_path.endswith(".pdf"):
                     loader = PyMuPDFLoader(file_path)
                 else:
-                    loader = TextLoader(file_path)
+                    loader = TextLoader(file_path, encoding="utf-8")
                 documents = loader.load()
                 all_documents.extend(documents)
+        
+        # Filter out documents with minimal content (less than 50 characters)
+        # This removes placeholder, stub, or empty documents that don't add value to RAG
+        # More lenient for PDFs which may have sparse content on some pages
+        all_documents = [doc for doc in all_documents if len(doc.page_content.strip()) > 50]
+        
+        if not all_documents:
+            raise ValueError("No valid documents found after filtering. Check that document files contain sufficient content.")
         
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"

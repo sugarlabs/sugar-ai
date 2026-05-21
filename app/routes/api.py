@@ -10,10 +10,16 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, Optional, List
+import sys
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent, extract_answer_from_output
 from app.config import settings
+from app.auth import get_current_user
+
+# Import document fetching module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from scripts.fetch_sugar_docs import fetch_all_docs
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -326,3 +332,67 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+
+@router.post("/refresh-docs")
+async def refresh_docs(
+    user_data: tuple = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """
+    Refresh documentation by fetching latest docs from GitHub and rebuilding vectorstore.
+    Requires admin permission (can_change_model: true).
+    """
+    # Extract user from tuple (user, authenticated)
+    user, authenticated = user_data
+    client_ip = request.client.host if request else "unknown"
+    
+    # Check authentication
+    if not authenticated or not user or not user.can_change_model:
+        logger.warning(f"Unauthorized refresh-docs attempt from {client_ip}")
+        raise HTTPException(status_code=403, detail="Unauthorized. Admin permission required.")
+    
+    logger.info(f"REQUEST - /refresh-docs - User: {user.name} - IP: {client_ip}")
+    
+    try:
+        timestamp = datetime.now().isoformat()
+        
+        # Get GitHub token from environment (optional)
+        github_token = os.getenv("GITHUB_TOKEN", None)
+        
+        # Fetch all documents
+        logger.info("Fetching Sugar documentation from GitHub...")
+        fetch_results = fetch_all_docs(github_token=github_token)
+        
+        if not fetch_results["success"]:
+            error_msg = f"Failed to fetch some documents: {', '.join(fetch_results['errors'])}"
+            logger.error(f"Error refreshing docs - User: {user.name} - {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
+        
+        # Rebuild vectorstore with all docs
+        logger.info("Rebuilding vectorstore with fetched documents...")
+        doc_paths = settings.DOC_PATHS
+        
+        # Add newly fetched docs to the list if they're not already there
+        docs_dir = "docs"
+        fetched_files = [os.path.join(docs_dir, doc) for doc in fetch_results["fetched_docs"]]
+        all_docs = list(set(doc_paths + fetched_files))
+        
+        # Rebuild vectorstore
+        agent.setup_vectorstore(all_docs)
+        
+        logger.info(f"SUCCESS - /refresh-docs - User: {user.name} - Fetched {len(fetch_results['fetched_docs'])} docs")
+        
+        return {
+            "status": "success",
+            "docs_refreshed": fetch_results["fetched_docs"],
+            "vectorstore_rebuilt": True,
+            "timestamp": timestamp,
+            "total_docs_count": len(all_docs)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ERROR - /refresh-docs - User: {user.name} - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error refreshing documentation: {str(e)}")

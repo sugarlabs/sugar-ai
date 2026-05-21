@@ -499,6 +499,233 @@ Review the terminal output for further details and error messages.
 
 When deploying Sugar-AI in CI/CD pipelines, you'll need to configure environment variables properly. Current CI/CD uses github webhooks. So make sure to create a webhook secret and add it to the `.env`.
 
+## Keeping RAG Docs Up to Date
+
+Sugar-AI includes a dynamic document fetching system to keep your RAG (Retrieval-Augmented Generation) documentation fresh and current. Instead of manually managing static documentation files, you can automatically fetch and index the latest Sugar documentation from GitHub.
+
+### Overview
+
+The dynamic document fetching system:
+- Fetches documentation from Sugar Labs repositories on GitHub
+- Converts markdown to clean plain text (removes headers, HTML tags, etc.)
+- Adds metadata about the source URL and fetch timestamp
+- Rebuilds the vector store for efficient retrieval
+- Supports GitHub API authentication for higher rate limits
+
+### Manual Document Fetching
+
+To fetch and update documentation manually:
+
+#### Basic Usage (No Authentication)
+
+```bash
+python scripts/fetch_sugar_docs.py
+```
+
+This will fetch all configured documentation sources and save them to the `docs/` directory.
+
+#### With GitHub Authentication
+
+For higher API rate limits, you can provide a GitHub personal access token:
+
+```bash
+export GITHUB_TOKEN=your_github_personal_access_token
+python scripts/fetch_sugar_docs.py
+```
+
+To generate a GitHub token:
+1. Go to https://github.com/settings/tokens
+2. Click "Generate new token (classic)"
+3. Select scope: `public_repo` (read-only access)
+4. Copy the token and use it as shown above
+
+#### Expected Output
+
+```
+============================================================
+SUGAR-AI DOCUMENT FETCH SUMMARY
+============================================================
+Timestamp: 2026-03-21T10:30:45.123456
+Total documents attempted: 3
+Successfully fetched: 3
+Failed: 0
+
+Fetched documents:
+  ✓ sugar-activity.txt
+  ✓ sugar-activity-tutorial.txt
+  ✓ hello-world-readme.txt
+
+============================================================
+Fetched 3 docs successfully
+```
+
+#### Handling Errors
+
+The script handles common errors gracefully:
+- **404 Not Found**: If a documentation URL no longer exists
+- **Network Failures**: Connection timeouts or network errors
+- **Authentication Issues**: Invalid or expired GitHub tokens
+
+Failed documents are reported in the output, and remaining documents are still fetched and indexed.
+
+### Automated Document Refreshing via API
+
+#### Using the /refresh-docs Endpoint
+
+For automated updates, you can use the `/refresh-docs` endpoint. This requires admin permissions (`can_change_model: true` in your API key configuration).
+
+#### Example Request
+
+```bash
+curl -X POST "http://localhost:8000/refresh-docs" \
+  -H "X-API-Key: sugarai2024"
+```
+
+#### Example Response
+
+```json
+{
+  "status": "success",
+  "docs_refreshed": [
+    "sugar-activity.txt",
+    "sugar-activity-tutorial.txt",
+    "hello-world-readme.txt"
+  ],
+  "vectorstore_rebuilt": true,
+  "timestamp": "2026-03-21T10:45:30.123456",
+  "total_docs_count": 6
+}
+```
+
+#### Using OAuth Authentication
+
+If you're authenticated via OAuth with admin permissions:
+
+```bash
+# Using OAuth session (admin with can_change_model: true)
+curl -X POST "http://localhost:8000/refresh-docs" \
+  -H "Cookie: session=your_session_cookie"
+```
+
+#### Error Handling
+
+If the refresh fails, the endpoint returns an error response:
+
+```json
+{
+  "detail": "Failed to fetch some documents: Document not found (404): https://raw.githubusercontent.com/sugarlabs/sugar-docs/master/src/sugar-activity.md"
+}
+```
+
+### Configuration
+
+The documentation sources are defined in `scripts/fetch_sugar_docs.py`:
+
+```python
+DOCS_TO_FETCH = [
+    {
+        "url": "https://raw.githubusercontent.com/sugarlabs/sugar-docs/master/src/sugar-activity.md",
+        "filename": "sugar-activity.txt"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/sugarlabs/sugar-docs/master/src/sugar-activity-tutorial.md",
+        "filename": "sugar-activity-tutorial.txt"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/sugarlabs/hello-world/master/README.md",
+        "filename": "hello-world-readme.txt"
+    }
+]
+```
+
+To add more documentation sources, edit this list with additional `url` and `filename` pairs.
+
+### Scheduling Document Updates
+
+#### Using Cron (Unix/Linux/macOS)
+
+Schedule automatic document updates daily at 2 AM:
+
+```bash
+0 2 * * * cd /path/to/sugar-ai && GITHUB_TOKEN=your_token python scripts/fetch_sugar_docs.py
+```
+
+#### Using GitHub Actions
+
+Create `.github/workflows/refresh-docs.yml`:
+
+```yaml
+name: Refresh Sugar Docs
+
+on:
+  schedule:
+    # Runs at 2 AM UTC daily
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  refresh-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Fetch and update docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/fetch_sugar_docs.py
+      
+      - name: Commit and push updated docs
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/
+          git commit -m "chore: update Sugar documentation"
+          git push
+```
+
+### Document Format
+
+Each fetched document includes:
+1. **Header**: Source URL and timestamp in format `# Fetched from [url] on [timestamp]`
+2. **Content**: Converted from markdown to plain text
+   - Markdown headers (`#`, `##`, etc.) converted to plain text
+   - HTML tags removed
+   - Excessive whitespace cleaned up
+   - Maintains readability for RAG retrieval
+
+### Troubleshooting
+
+#### Rate Limiting Issues
+
+Without GitHub authentication, you're limited to 60 requests/hour. With authentication:
+- Classic tokens: 5000 requests/hour
+- App tokens: Higher limits depending on configuration
+
+If you see rate limit errors, use GitHub authentication as shown above.
+
+#### Mixed Authentication Methods
+
+The system supports multiple authentication methods in order of preference:
+1. **X-API-Key Header**: API key-based access
+2. **Admin Cookie**: OAuth session with admin permissions
+3. **Unauthenticated**: Via environment variable `GITHUB_TOKEN`
+
+#### Rebuild Issues
+
+If the vectorstore rebuild fails, check:
+1. Document files exist in the `docs/` directory
+2. Documents are readable and contain valid text
+3. Sufficient system memory for embedding generation
+4. Check logs: `tail -f sugar_ai.log`
+
 ## Using the Streamlit App
 
 Sugar-AI also provides a Streamlit-based interface for quick interactions and visualizations.
