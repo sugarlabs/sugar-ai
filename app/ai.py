@@ -82,7 +82,7 @@ class RAGAgent:
             model_obj = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 quantization_config=bnb_config,
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 device_map="auto"
             )
             self.model = pipeline(
@@ -106,7 +106,7 @@ class RAGAgent:
                 model=self.model_name,
                 max_new_tokens=1024,
                 truncation=True,
-                torch_dtype=dtype, # Use the dynamic dtype
+                dtype=torch.float16, # Use the dynamic dtype
                 device=device,     # Use the dynamic device
             )
 
@@ -128,7 +128,7 @@ class RAGAgent:
             model=self.model_name,
             max_length=1024,
             truncation=True,
-            torch_dtype=torch.float16
+            dtype=torch.float16
         )
         
         self.simplify_model = self.model

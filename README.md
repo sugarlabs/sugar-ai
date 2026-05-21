@@ -5,7 +5,11 @@ This document describes how to run Sugar-AI, test recent changes, and troublesho
 ## Running Sugar-AI with Docker
 
 Sugar-AI provides a Docker-based deployment option for an isolated and reproducible environment.
-
+> **⚠️ Python 3.14 Users**
+> A known warning appears on startup:
+> `Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater`
+> This comes from an upstream issue in `langchain-core` and does **not** affect
+> functionality. For a warning-free experience, use Python 3.11 or 3.12.
 ### Build the Docker image
 
 Open your terminal in the project's root directory and run:
