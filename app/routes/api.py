@@ -326,3 +326,36 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+
+@router.get("/history/summary/{activity_id}")
+async def get_historical_summary(
+    activity_id: str,
+    user_id: Optional[str] = None,
+    user_info: dict = Depends(verify_api_key),
+    request: Request = None
+):
+    """
+    Generate a historical 'Growth Summary' from past reflections for a specific activity.
+    Note: Direct integration with sugar-datastore is pending; currently uses mock data.
+    """
+    start_time = time.time()
+    client_ip = request.client.host if request else "unknown"
+    logger.info(f"REQUEST - /history/summary/{activity_id} - IP: {client_ip}")
+    
+    try:
+        summary = agent.generate_historical_summary(
+            activity_id=activity_id,
+            user_id=user_id,
+        )
+        
+        process_time = time.time() - start_time
+        logger.info(f"RESPONSE - /history/summary/{activity_id} - Success - Time: {process_time:.2f}s")
+        
+        return {
+            "status": "success",
+            "activity_id": activity_id,
+            "historical_summary": summary
+        }
+    except Exception:
+        logger.error(f"ERROR - /history/summary/{activity_id} - Failed to generate summary")
+        raise HTTPException(status_code=500, detail="Error generating historical summary")

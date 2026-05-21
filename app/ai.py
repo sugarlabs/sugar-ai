@@ -2,6 +2,7 @@
 AI functionality for Sugar-AI, including RAG and LLM components.
 """
 import os
+import re
 import torch
 from transformers import pipeline
 from langchain_community.vectorstores import FAISS
@@ -15,6 +16,17 @@ import app.prompts as prompts
 from app.config import settings
 import logging
 logger = logging.getLogger("sugar-ai")
+
+
+def redact_pii(text: str) -> str:
+    """Redact common PII patterns from free text."""
+    if not isinstance(text, str):
+        return ""
+
+    redacted = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[redacted-email]", text)
+    redacted = re.sub(r"(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}", "[redacted-phone]", redacted)
+    redacted = re.sub(r"@\w+", "[redacted-handle]", redacted)
+    return redacted
 
 def format_docs(docs):
     """Return document content separated by newlines"""
@@ -119,6 +131,7 @@ class RAGAgent:
         self.context_prompt = ChatPromptTemplate.from_template(prompts.CODE_CONTEXT_PROMPT)
         self.kids_debug_prompt = ChatPromptTemplate.from_template(prompts.KIDS_DEBUG_PROMPT)
         self.kids_context_prompt = ChatPromptTemplate.from_template(prompts.KIDS_CONTEXT_PROMPT)
+        self.summary_prompt = ChatPromptTemplate.from_template(prompts.LONGITUDINAL_SUMMARY_PROMPT)
 
     def set_model(self, model: str) -> None:
         """Update the model used by the agent"""
@@ -284,6 +297,61 @@ class RAGAgent:
             
         except Exception as e:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
+
+    def get_historical_reflections(self, activity_id: str, user_id: Optional[str] = None) -> List[str]:
+        """Return historical reflections for an activity (mocked until datastore integration)."""
+        _ = user_id
+        mock_data = {
+            "default": [
+                "I struggled to draw a perfect circle with the turtle.",
+                "I want to learn how to add labels to my drawings next time.",
+                "Today I finally figured out how to use the repeat loop!",
+            ]
+        }
+        return mock_data.get(activity_id, mock_data["default"])
+
+    def generate_historical_summary(
+        self,
+        activity_id: str,
+        user_id: Optional[str] = None,
+        reflections: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Generate a pedagogical growth summary from historical reflections.
+        
+        Args:
+            activity_id: Activity identifier for reflection history lookup.
+            user_id: Optional user identifier for future datastore filtering.
+            reflections: Optional reflection list; if omitted, mocked retrieval is used.
+            
+        Returns:
+            The generated summary string.
+        """
+        if reflections is None:
+            reflections = self.get_historical_reflections(activity_id=activity_id, user_id=user_id)
+
+        if not reflections:
+            return "No past reflections found."
+
+        safe_reflections = [redact_pii(r) for r in reflections]
+
+        # Combine the reflections into a single string
+        combined_reflections = "\\n".join(f"- {r}" for r in safe_reflections)
+        
+        # Build the chain: prompt -> combine -> model -> extract
+        chain = (
+            self.summary_prompt
+            | combine_messages
+            | self.model
+            | extract_answer_from_output
+        )
+        
+        try:
+            response = chain.invoke({"reflections": combined_reflections})
+            return redact_pii(response)
+        except Exception:
+            logger.error("Error generating historical summary")
+            return "Unable to generate summary at this time."
 
     def _normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
         """
