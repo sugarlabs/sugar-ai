@@ -61,7 +61,53 @@ DEV_MODE=1 python main.py
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### Test API endpoints
+## Model Routing System
+
+Sugar-AI now features a modular "Model Routing Architecture" that allows you to plug in different AI providers easily. This system decouples the application logic from specific model implementations.
+
+### Supported Providers
+- **OpenAI**: Use industry-standard GPT models via API.
+- **HuggingFace**: Leverage the vast library of open-source models using the `transformers` pipeline.
+- **Local**: Hook into custom local inference engines or mock responses for development.
+
+### Usage Example
+You can route requests to different providers using the `model_router`:
+
+```python
+from sugar_ai.core.model_router import run_model
+
+# Example: Using HuggingFace
+response = run_model("How do I create a button in GTK?", provider="huggingface")
+print(response["response"])
+```
+
+### Configuration
+The system is driven by a centralized config in `sugar_ai/config/settings.py`. You can override the default provider and model via environment variables in your `.env` file.
+
+#### Environment Variables & Provider Setup
+To switch between different AI providers without changing code, update your `.env` file:
+
+```env
+# Choose your default provider: openai, huggingface, or local
+DEFAULT_PROVIDER=openai
+
+# Set the specific model for the provider
+DEFAULT_MODEL=gpt-3.5-turbo
+
+# For OpenAI provider:
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEFAULT_PROVIDER` | The active AI engine | `openai` |
+| `DEFAULT_MODEL` | The model ID to use | `gpt-3.5-turbo` |
+| `OPENAI_API_KEY` | Required for OpenAI | - |
+
+> [!TIP]
+> Use `DEFAULT_PROVIDER=local` for zero-cost development or testing model-agnostic code.
+
+## Test API endpoints
 
 Sugar-AI provides three different endpoints for different use cases:
 

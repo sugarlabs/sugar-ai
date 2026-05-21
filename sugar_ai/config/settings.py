@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     DEV_MODE: bool = os.getenv("DEV_MODE", "0") == "1"
     DEV_MODEL_NAME: str | None = None
     PROD_MODEL_NAME: str | None = None
-    DEFAULT_MODEL: str | None = None
-    
+    DEFAULT_PROVIDER: str = "openai"
+    DEFAULT_MODEL: str = "gpt-3.5-turbo"
     API_KEYS: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     MODEL_CHANGE_PASSWORD: str = ""
     DOC_PATHS: List[str] = Field(default_factory=list)

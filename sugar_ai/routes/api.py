@@ -11,9 +11,10 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, List
 
-from app.database import get_db, APIKey
-from app.ai import RAGAgent, extract_answer_from_output
-from app.config import settings
+from sugar_ai.database import get_db, APIKey
+from sugar_ai.ai import RAGAgent, extract_answer_from_output
+from sugar_ai.config import settings
+from sugar_ai.core.model_router import run_model
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -22,6 +23,8 @@ class ChatMessage(BaseModel):
 
 class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
+    provider: str = Field(settings.DEFAULT_PROVIDER, description="AI provider (openai, huggingface, local)")
+    model: Optional[str] = Field(settings.DEFAULT_MODEL, description="Model name to use")
     chat: bool = Field(False, description="Enable chat mode (uses messages instead of question)")
     question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
     custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
@@ -92,7 +95,7 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        answer = agent.run(question)
+        answer = await agent.run(question)
         
         # log completion
         process_time = time.time() - start_time
@@ -130,8 +133,15 @@ async def ask_llm(
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        response = agent.model(question)
-        answer = extract_answer_from_output(response)
+        config = {"model": settings.DEFAULT_MODEL}
+        response = await run_model(question, provider=settings.DEFAULT_PROVIDER, config=config)
+        
+        if isinstance(response, dict) and "response" in response:
+            answer = response["response"]
+        elif isinstance(response, dict) and "error" in response:
+            raise Exception(response["error"])
+        else:
+            answer = str(response)
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
@@ -185,7 +195,7 @@ async def ask_llm_prompted(
             messages_dict = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
             
             # Call the agent's chat completion function
-            answer = agent.run_chat_completion(
+            answer = await agent.run_chat_completion(
                 messages=messages_dict,
                 max_length=request_data.max_length,
                 truncation=request_data.truncation,
@@ -227,7 +237,7 @@ async def ask_llm_prompted(
             logger.info(f"REQUEST - /ask-llm-prompted - User: {user_info['name']} - IP: {client_ip} - Question: {request_data.question[:200]}...")
             logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
             
-            answer = agent.run_with_custom_prompt(
+            answer = await agent.run_with_custom_prompt(
                 question=request_data.question,
                 custom_prompt=request_data.custom_prompt,
                 max_length=request_data.max_length,
@@ -275,7 +285,7 @@ async def debug(
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     
     try:
-        response = agent.debug(code, context)
+        response = await agent.debug(code, context)
         answer = response
         
         process_time = time.time() - start_time
