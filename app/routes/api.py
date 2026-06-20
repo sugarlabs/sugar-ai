@@ -1,9 +1,12 @@
 """
 API routes for Sugar-AI.
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
+from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
 import time
 import logging
 import os
@@ -326,3 +329,67 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+    
+@router.post("/upload-document")
+async def upload_document(
+    file: UploadFile = File(...),
+    user_info: dict = Depends(verify_api_key),
+    request: Request = None
+):
+    """
+    Upload a document and dynamically add it to the vector store.
+    """
+    client_ip = request.client.host if request else "unknown"
+    logger.info(f"REQUEST - /upload-document - User: {user_info['name']} - IP: {client_ip} - File: {file.filename}")
+
+    # Validate file type
+    if not file.filename.endswith((".txt", ".pdf")):
+        raise HTTPException(status_code=400, detail="Only .txt and .pdf files are supported")
+
+    try:
+        upload_dir = "uploaded_docs"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        safe_filename = os.path.basename(file.filename)
+        file_path = os.path.join(upload_dir, safe_filename)
+
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+
+        # Load document
+        if file.filename.endswith(".pdf"):
+            loader = PyMuPDFLoader(file_path)
+        else:
+            loader = TextLoader(file_path)
+
+        documents = loader.load()
+
+        # Split documents
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        chunks = splitter.split_documents(documents)
+
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+        # Create or update vector store
+        if agent.retriever is None:
+            logger.info("Creating new vector store from uploaded document.")
+            vector_store = FAISS.from_documents(chunks, embeddings)
+            agent.retriever = vector_store.as_retriever()
+        else:
+            logger.info("Adding documents to existing vector store.")
+            agent.retriever.vectorstore.add_documents(chunks)
+
+        logger.info(f"Document indexed successfully: {file.filename} - chunks added: {len(chunks)}")
+
+        return {
+            "message": "Document uploaded and indexed successfully",
+            "chunks_added": len(chunks),
+            "user": user_info["name"]
+        }
+
+    except Exception as e:
+        logger.error(f"ERROR - Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error indexing document: {str(e)}")

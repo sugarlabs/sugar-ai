@@ -149,6 +149,11 @@ class RAGAgent:
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         
+        if not all_documents:
+            logger.warning("No documents found for vector store initialization.")
+            self.retriever = None
+            return None
+
         vector_store = FAISS.from_documents(all_documents, embeddings)
         self.retriever = vector_store.as_retriever()
         return self.retriever
