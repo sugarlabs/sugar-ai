@@ -4,16 +4,17 @@ Configuration settings for Sugar-AI.
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Dev mode (THIS MUST EXIST)
     DEV_MODE: bool = os.getenv("DEV_MODE", "0") == "1"
-    DEV_MODEL_NAME: str | None = None
-    PROD_MODEL_NAME: str | None = None
-    DEFAULT_MODEL: str | None = None
+    DEV_MODEL_NAME: Optional[str] = None
+    PROD_MODEL_NAME: Optional[str] = None
+    DEFAULT_MODEL: Optional[str] = None
+    AVAILABLE_MODELS: Optional[str] = None
     
     API_KEYS: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     MODEL_CHANGE_PASSWORD: str = ""
@@ -38,3 +39,8 @@ class Settings(BaseSettings):
         extra = "allow"  # this allows extra attribute if we have any
 
 settings = Settings()
+# Parse AVAILABLE_MODELS into a list
+if settings.AVAILABLE_MODELS:
+    settings.AVAILABLE_MODELS = [m.strip() for m in settings.AVAILABLE_MODELS.split(",") if m.strip()]
+else:
+    settings.AVAILABLE_MODELS = []

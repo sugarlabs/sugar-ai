@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 import os
 
 from app import create_app
-from app.ai import RAGAgent
+from app.ai import RAGAgent, ModelManager
 from app.database import get_db
 from app.auth import sync_env_keys_to_db
 from app.config import settings
@@ -40,20 +40,9 @@ async def startup_event():
     """Initialize data on app startup"""
     db = next(get_db())
     sync_env_keys_to_db(db)
-    if settings.DEV_MODE:
-        active_model = settings.DEV_MODEL_NAME
-        logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
-    else:
-        active_model = settings.PROD_MODEL_NAME
-        logger.info(f"PRODUCTION mode. Loading full model: {active_model}")
-
-    initialized_agent = RAGAgent(model=active_model)
-    initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
-
-    # Inject this instance into the API module
-    # This updates the 'agent = None' in api.py to be the real loaded model
+    # Do NOT load models during startup. Models will be loaded lazily by ModelManager when needed.
+    initialized_agent = RAGAgent()
     api.agent = initialized_agent
-    
     app.state.agent = initialized_agent
 
 
