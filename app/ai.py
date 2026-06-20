@@ -9,7 +9,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, GenerationConfig
 from typing import Optional, List
 import app.prompts as prompts
 from app.config import settings
@@ -252,16 +252,20 @@ class RAGAgent:
         
         # Generate response with custom parameters
         try:
-            response = self.model(
-                full_prompt,
+            gen_config = GenerationConfig(
                 max_length=max_length,
-                truncation=truncation,
                 repetition_penalty=repetition_penalty,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
                 do_sample=True if temperature > 0 else False,
                 pad_token_id=self.model.tokenizer.eos_token_id,
+            )
+
+            response = self.model(
+                full_prompt,
+                truncation=truncation,
+                generation_config=gen_config,
             )
             
             # Extract the answer from the generated text
@@ -372,16 +376,20 @@ class RAGAgent:
 
         # Generate response with custom parameters
         try:
-            response = self.model(
-                full_prompt,
+            gen_config = GenerationConfig(
                 max_length=max_length,
-                truncation=truncation,
                 repetition_penalty=repetition_penalty,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
                 do_sample=True if temperature > 0 else False,
                 pad_token_id=self.model.tokenizer.eos_token_id,
+            )
+
+            response = self.model(
+                full_prompt,
+                truncation=truncation,
+                generation_config=gen_config,
             )
             
             # Extract the answer from the generated text
