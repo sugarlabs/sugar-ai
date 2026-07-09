@@ -10,6 +10,8 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, Optional, List
+from threading import Lock
+from collections import defaultdict
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
@@ -42,26 +44,29 @@ logger = logging.getLogger("sugar-ai")
 # Initialize the agent
 agent = None
 
-# user quotas tracking
-user_quotas: Dict[str, Dict] = {}
+# thread-safe user quota tracking
+quota_lock = Lock()
+
+user_quotas = defaultdict(lambda: {"count": 0, "date": None})
 
 def check_quota(api_key: str) -> bool:
-    """Check if a user has exceeded their daily quota"""
-    today = datetime.now().date()
-    
-    if api_key not in user_quotas:
-        user_quotas[api_key] = {"count": 0, "date": today}
-        return True
-        
-    # reset quota daily
-    if user_quotas[api_key]["date"] != today:
-        user_quotas[api_key]["count"] = 0
-        user_quotas[api_key]["date"] = today
-        
-    if user_quotas[api_key]["count"] >= settings.MAX_DAILY_REQUESTS:
-        return False
-        
-    user_quotas[api_key]["count"] += 1
+    """Check if a user has exceeded their daily quota safely"""
+
+    with quota_lock:
+
+        today = datetime.now().date()
+
+        quota = user_quotas[api_key]
+
+        # reset quota daily
+        if quota["date"] != today:
+            quota["count"] = 0
+            quota["date"] = today
+
+        if quota["count"] >= settings.MAX_DAILY_REQUESTS:
+            return False
+
+        quota["count"] += 1
     return True
 
 def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), request: Request = None):
