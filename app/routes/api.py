@@ -340,3 +340,10 @@ async def change_model(
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
+
+@router.get("/models")
+def get_models():
+    return {
+        "current_model": settings.DEFAULT_MODEL,
+        "provider": settings.AI_PROVIDER if hasattr(settings, 'AI_PROVIDER') else "huggingface"
+    }
