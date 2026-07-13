@@ -30,6 +30,7 @@ from app.database import get_db
 from app.auth import sync_env_keys_to_db
 from app.config import settings
 from app.routes import api
+from app.database import APIKey
 
 # setup logging
 logger = logging.getLogger("sugar-ai")
@@ -41,6 +42,22 @@ async def startup_event():
     """Initialize data on app startup"""
     db = next(get_db())
     sync_env_keys_to_db(db)
+
+    # Re-load all approved OAuth keys from the database into memory.
+    # Without this, OAuth-authenticated users lose API access after every
+    # server restart because settings.API_KEYS is only populated from .env
+    # at startup, not from previously issued OAuth keys stored in the DB.
+    approved_keys = db.query(APIKey).filter(
+        APIKey.approved == True,
+        APIKey.is_active == True
+    ).all()
+    for key_obj in approved_keys:
+        if key_obj.key not in settings.API_KEYS:
+            settings.API_KEYS[key_obj.key] = {
+                "name": key_obj.name,
+                "can_change_model": key_obj.can_change_model
+            }
+    logger.info(f"Loaded {len(approved_keys)} approved API keys from database.")
     if settings.DEV_MODE:
         active_model = settings.DEV_MODEL_NAME
         logger.info(f"DEV_MODE active. Loading lightweight model: {active_model}")
