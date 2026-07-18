@@ -8,13 +8,13 @@ import time
 import logging
 import os
 import json
-from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Optional, List
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
+from app.quota import check_and_increment_quota
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -42,43 +42,30 @@ logger = logging.getLogger("sugar-ai")
 # Initialize the agent
 agent = None
 
-# user quotas tracking
-user_quotas: Dict[str, Dict] = {}
-
-def check_quota(api_key: str) -> bool:
-    """Check if a user has exceeded their daily quota"""
-    today = datetime.now().date()
-    
-    if api_key not in user_quotas:
-        user_quotas[api_key] = {"count": 0, "date": today}
-        return True
-        
-    # reset quota daily
-    if user_quotas[api_key]["date"] != today:
-        user_quotas[api_key]["count"] = 0
-        user_quotas[api_key]["date"] = today
-        
-    if user_quotas[api_key]["count"] >= settings.MAX_DAILY_REQUESTS:
-        return False
-        
-    user_quotas[api_key]["count"] += 1
-    return True
-
-def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), request: Request = None):
+def verify_api_key(
+    api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
     """Verify API key and check quota"""
     if not api_key:
         logger.warning(f"API key missing: {request.client.host if request else 'unknown'}")
         raise HTTPException(status_code=401, detail="API key is missing")
-    
+
     if api_key not in settings.API_KEYS:
         logger.warning(f"Invalid API key used: {api_key[:5]}... from {request.client.host if request else 'unknown'}")
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
-    if not check_quota(api_key):
+
+    try:
+        quota = check_and_increment_quota(api_key, db)
+    except HTTPException:
         logger.warning(f"Quota exceeded for user: {settings.API_KEYS[api_key]['name']}")
-        raise HTTPException(status_code=429, detail="Daily request quota exceeded")
-    
-    return settings.API_KEYS[api_key]
+        raise
+
+    # copy so we don't mutate the shared settings.API_KEYS entry
+    user_info = dict(settings.API_KEYS[api_key])
+    user_info["quota"] = quota
+    return user_info
 
 @router.post("/ask")
 async def ask_question(
@@ -99,20 +86,10 @@ async def ask_question(
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
-        # check quota
-        api_key = next(
-            key for key, value in settings.API_KEYS.items()
-            if value['name'] == user_info['name']
-        )
-        remaining = (
-            settings.MAX_DAILY_REQUESTS
-            - user_quotas.get(api_key, {}).get("count", 0)
-        )
-        
         return {
-            "answer": answer, 
+            "answer": answer,
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": user_info["quota"]
         }
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
@@ -136,14 +113,10 @@ async def ask_llm(
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
-        # check quota
-        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-        
         return {
-            "answer": answer, 
+            "answer": answer,
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": user_info["quota"]
         }
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
@@ -160,11 +133,7 @@ async def ask_llm_prompted(
     """
     start_time = time.time()
     client_ip = request.client.host if request else "unknown"
-    
-    # Check quota first
-    api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-    remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-    
+
     try:
         if request_data.chat:
             # Chat completions mode
@@ -213,7 +182,7 @@ async def ask_llm_prompted(
                     "finish_reason": "stop"
                 }],
                 "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
+                "quota": user_info["quota"],
                 "generation_params": {
                     "max_length": request_data.max_length,
                     "truncation": request_data.truncation,
@@ -252,7 +221,7 @@ async def ask_llm_prompted(
             return {
                 "answer": answer, 
                 "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
+                "quota": user_info["quota"],
                 "generation_params": {
                     "max_length": request_data.max_length,
                     "truncation": request_data.truncation,
@@ -289,16 +258,12 @@ async def debug(
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
-        # check quota
-        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-        
         return {
-            "answer": answer, 
+            "answer": answer,
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": user_info["quota"]
         }
-        
+
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
