@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # Dev mode (THIS MUST EXIST)
     DEV_MODE: bool = os.getenv("DEV_MODE", "0") == "1"
-    DEV_MODEL_NAME: str | None = None
+    DEV_MODEL_NAME: str | None = "HuggingFaceTB/SmolLM2-135M-Instruct"
     PROD_MODEL_NAME: str | None = None
     DEFAULT_MODEL: str | None = None
     

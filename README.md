@@ -54,6 +54,13 @@ mode that uses a lightweight, CPU-friendly model.
 DEV_MODE=1 python main.py
 ```
 
+By default, `DEV_MODE` now uses a small model (`HuggingFaceTB/SmolLM2-135M-Instruct`) suitable for low-RAM machines. If you would like to use a different model for local development, set `DEV_MODEL_NAME` in your `.env` file:
+
+```bash
+DEV_MODE=1
+DEV_MODEL_NAME=HuggingFaceTB/SmolLM2-135M-Instruct
+```
+
 
 ### Run the server
 
