@@ -51,7 +51,8 @@ class RAGAgent:
         """Initialize RAGAgent with a provider."""
         self.provider = provider
         self.model_name = provider.get_model_name()
-        self.retriever: Optional[FAISS] = None
+        self.vector_store: Optional[FAISS] = None
+        self.retriever = None
 
         self.prompt_template = prompts.PROMPT_TEMPLATE
         self.child_prompt_template = prompts.CHILD_FRIENDLY_PROMPT
@@ -88,18 +89,38 @@ class RAGAgent:
         )
 
         vector_store = FAISS.from_documents(all_documents, embeddings)
+        self.vector_store = vector_store
         self.retriever = vector_store.as_retriever()
         return self.retriever
 
     def get_relevant_document(self, query: str, threshold: float = 0.5):
         """Get the most relevant document for a query."""
+        if self.vector_store is not None:
+            results = self.vector_store.similarity_search_with_relevance_scores(
+                query, k=1
+            )
+            if results:
+                doc, score = results[0]
+                if score >= threshold:
+                    return doc, score
+            return None, 0.0
+
+        if self.retriever is None:
+            return None, 0.0
+
         results = self.retriever.invoke(query)
-        if results:
-            top_result = results[0]
-            score = top_result.metadata.get("score", 0.0)
+        if not results:
+            return None, 0.0
+
+        top_result = results[0]
+        score = top_result.metadata.get("score")
+        if score is not None:
             if score >= threshold:
                 return top_result, score
-        return None, 0.0
+            return None, 0.0
+
+        # Retriever returned ranked results but no score metadata; trust ranking.
+        return top_result, 1.0
 
     def debug(self, code: str, context: bool) -> str:
         """Debug or explain python code using provider."""
