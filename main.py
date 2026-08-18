@@ -68,7 +68,7 @@ async def startup_event():
     )
 
     initialized_agent = RAGAgent(provider=provider)
-    initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
+    initialized_agent.setup_vectorstore(settings.DOC_PATHS)
 
     # Inject this instance into the API module
     api.agent = initialized_agent

@@ -51,7 +51,7 @@ class RAGAgent:
         """Initialize RAGAgent with a provider."""
         self.provider = provider
         self.model_name = provider.get_model_name()
-        self.retriever: Optional[FAISS] = None
+        self.vector_store: Optional[FAISS] = None
 
         self.prompt_template = prompts.PROMPT_TEMPLATE
         self.child_prompt_template = prompts.CHILD_FRIENDLY_PROMPT
@@ -87,16 +87,26 @@ class RAGAgent:
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
 
-        vector_store = FAISS.from_documents(all_documents, embeddings)
-        self.retriever = vector_store.as_retriever()
-        return self.retriever
+        self.vector_store = FAISS.from_documents(all_documents, embeddings)
+        return self.vector_store
 
     def get_relevant_document(self, query: str, threshold: float = 0.5):
-        """Get the most relevant document for a query."""
-        results = self.retriever.invoke(query)
+        """Get the most relevant document for a query.
+
+        Uses FAISS similarity_search_with_score directly to obtain L2
+        distance scores.  The raw distance is converted to a similarity
+        value in [0, 1] via ``1 / (1 + distance)`` so that higher is
+        better and the *threshold* comparison works correctly.
+        """
+        if self.vector_store is None:
+            return None, 0.0
+
+        results = self.vector_store.similarity_search_with_score(query, k=1)
         if results:
-            top_result = results[0]
-            score = top_result.metadata.get("score", 0.0)
+            top_result, distance = results[0]
+            # FAISS returns L2 distance (lower is better).
+            # Convert to a similarity score in [0, 1].
+            score = 1.0 / (1.0 + distance)
             if score >= threshold:
                 return top_result, score
         return None, 0.0
