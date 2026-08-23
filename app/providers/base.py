@@ -45,6 +45,12 @@ class GenerationParams:
 class BaseProvider:
     """OpenAI-compatible provider: speaks /v1/chat/completions over HTTP."""
 
+    # Whether chat() can carry image content parts to the backend.
+    # Off by default everywhere: a deployment turns it on only for a
+    # model actually served with vision, and nothing breaks when it
+    # stays off - images simply drop at the bridge.
+    supports_images = False
+
     def __init__(
         self,
         model_name: str,
