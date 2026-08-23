@@ -8,6 +8,7 @@ from app.reflection.activities import category_for_activity
 from app.reflection.bridge import ProviderBridge
 from app.routes import api as api_routes
 from app.routes.reflect import _quota_status, _to_engine_history, get_provider
+from reflection_engine.provider import MODEL_TURN_SCHEMA
 from reflection_engine.trace import as_record
 from reflection_engine.types import ChildTurn, EngineTurn
 
@@ -87,11 +88,17 @@ def test_reflect_chat_first_turn_builds_context_from_the_work(client, fake_provi
     system, user, schema = fake_provider.calls[0]
     assert "Rainbow Spirals" in user
     assert "I made spirals with turtle" in user
-    assert isinstance(schema, dict)
+    assert schema == MODEL_TURN_SCHEMA
 
 
 def test_reflect_chat_requires_api_key(client):
     resp = client.post("/reflect/chat", json=CHAT_PAYLOAD)
+    assert resp.status_code == 401
+
+
+def test_reflect_chat_rejects_an_unknown_api_key(client):
+    resp = client.post("/reflect/chat", json=CHAT_PAYLOAD,
+                       headers=_auth("not-a-registered-key"))
     assert resp.status_code == 401
 
 
@@ -118,6 +125,7 @@ def test_reflect_chat_rejects_an_unanswered_engine_turn(client, api_key):
     payload = dict(CHAT_PAYLOAD, records=[_engine_turn()])
     resp = client.post("/reflect/chat", json=payload, headers=_auth(api_key))
     assert resp.status_code == 422
+    assert "out of contract" in resp.json()["detail"]
 
 
 def test_reflect_chat_rejects_oversized_conversations(client, api_key):
@@ -165,6 +173,28 @@ def test_reflect_chat_floors_the_turn_when_the_provider_raises(client, app, api_
     assert body["record"]["text"] is None
 
 
+def test_reflect_chat_floors_a_turn_the_guard_rejects(
+        client, app, api_key, make_fake_provider):
+    # A different path to the same floor: the provider answers, but the
+    # guard refuses the turn (over the question-length cap).
+    app.dependency_overrides[get_provider] = \
+        lambda: make_fake_provider({"text": "x" * 250})
+    resp = client.post("/reflect/chat", json=CHAT_PAYLOAD, headers=_auth(api_key))
+    assert resp.status_code == 200
+    assert resp.json()["record"]["kind"] == "floor_request"
+
+
+def test_reflect_chat_returns_session_end_when_the_child_is_done(
+        client, app, api_key, make_fake_provider):
+    app.dependency_overrides[get_provider] = \
+        lambda: make_fake_provider({"child_wants_stop": True})
+    payload = dict(CHAT_PAYLOAD, records=[
+        _engine_turn(), _child_turn("i want to stop now")])
+    resp = client.post("/reflect/chat", json=payload, headers=_auth(api_key))
+    assert resp.status_code == 200
+    assert resp.json()["record"]["type"] == "session_end"
+
+
 def test_reflect_chat_quota_remaining_counts_down_per_call(
         client, fake_provider, api_key, monkeypatch):
     monkeypatch.setitem(
@@ -176,6 +206,15 @@ def test_reflect_chat_quota_remaining_counts_down_per_call(
         assert resp.status_code == 200
         assert resp.json()["quota"]["remaining"] == \
             settings.MAX_DAILY_REQUESTS - n
+
+
+def test_reflect_chat_returns_429_when_the_quota_is_spent(
+        client, api_key, monkeypatch):
+    monkeypatch.setitem(
+        api_routes.user_quotas, api_key,
+        {"count": settings.MAX_DAILY_REQUESTS, "date": date.today()})
+    resp = client.post("/reflect/chat", json=CHAT_PAYLOAD, headers=_auth(api_key))
+    assert resp.status_code == 429
 
 
 # --- the production provider seam (bypassed by the fixture override above) ---
@@ -223,6 +262,7 @@ def test_reflect_chat_work_context_reaches_the_engine(client, fake_provider, api
     _, user, _ = fake_provider.calls[0]
     assert "the jump finally worked" in user
     assert "5 minutes" in user
+    assert [img[-1] for img in fake_provider.images] == [b"jpg-bytes"]
 
 
 def test_reflect_chat_rejects_context_the_engine_refuses(client, api_key):
@@ -254,3 +294,4 @@ def test_reflect_chat_context_cannot_override_server_fields(
     assert "HIJACKED" not in user
     assert "INJECTED" not in user
     assert "Rainbow Spirals" in user
+    assert "Kind of work: creative" in user
