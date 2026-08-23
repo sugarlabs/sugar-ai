@@ -146,3 +146,22 @@ class BaseProvider:
     def close(self) -> None:
         """Release provider resources."""
         pass
+
+
+def apply_image_support(provider: BaseProvider, enabled: bool) -> None:
+    """Enable image input only where chat() can actually carry it.
+
+    Only the OpenAI-compatible base passes content-part lists to the
+    backend verbatim; the subclasses rebuild messages as plain text,
+    so the deployment flag cannot apply to them.
+    """
+    provider.supports_images = enabled and type(provider) is BaseProvider
+    if not provider.supports_images:
+        reason = (
+            f"{type(provider).__name__} cannot carry image parts"
+            if enabled
+            else "AI_SUPPORTS_IMAGES unset"
+        )
+        logging.getLogger("sugar-ai").info(
+            "reflection image input: off (%s)", reason
+        )

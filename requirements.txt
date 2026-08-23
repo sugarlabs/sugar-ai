@@ -19,3 +19,6 @@ httpx
 pydantic-settings
 sentence-transformers
 python-dotenv
+# PyPI publication for the engine is still an open question; until
+# then the tagged release installs straight from the repo.
+reflection-engine @ git+https://github.com/sugarlabs/reflection-engine@v0.1.0

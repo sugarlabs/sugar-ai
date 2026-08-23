@@ -70,7 +70,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### Test API endpoints
 
-Sugar-AI provides three different endpoints for different use cases:
+Sugar-AI provides four endpoints for different use cases:
 
 | Endpoint | Purpose | Input Format | Features |
 |----------|---------|--------------|----------|
@@ -78,6 +78,10 @@ Sugar-AI provides three different endpoints for different use cases:
 | `/ask-llm` | Direct LLM without RAG | Query parameter | • No document retrieval<br>• Direct model access<br>• Faster responses<br>• Default system prompt and parameters |
 | `/ask-llm-prompted(promoted mode[default])` | Custom prompt with advanced controls | JSON body | • Custom system prompts<br>• Configurable model parameters |
 | `/ask-llm-prompted(chat=True)` | Accepts chat history with system prompt | JSON body | • Send chat history along with system prompt<br>• Configurable model parameters |
+| `/reflect/chat` | Journal reflection turns | JSON body | • Same API-key check and quota as the other routes<br>• Conversation travels as reflection-engine trace records<br>• Optional image context, off unless `AI_SUPPORTS_IMAGES=1` |
+
+The reflection endpoint's tests run with
+`pip install -r requirements-dev.txt` and then `pytest`.
 
 - **GET endpoint**
 

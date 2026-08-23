@@ -12,6 +12,7 @@ RUN apt-get update && \
         python3.10-distutils \
         python3-pip \
         build-essential \
+        git \
         libdbus-1-dev && \
     rm -rf /var/lib/apt/lists/*
 
