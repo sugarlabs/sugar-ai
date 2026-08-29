@@ -1,11 +1,16 @@
 """
 Database models and connection handling for Sugar-AI.
 """
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Generator
+
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Date, DateTime, Text
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
 
 # database connection
 DATABASE_URL = "sqlite:///./sugar_ai.db"
@@ -23,7 +28,7 @@ class APIKey(Base):
     email = Column(String)
     can_change_model = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     request_reason = Column(Text, nullable=True)
     approved = Column(Boolean, default=False)
     
@@ -37,6 +42,14 @@ class APIKey(Base):
             "created_at": self.created_at.isoformat(),
             "approved": self.approved
         }
+
+
+class APIQuota(Base):
+    __tablename__ = "api_quotas"
+    api_key = Column(String, primary_key=True)
+    request_count = Column(Integer, default=0, nullable=False)
+    quota_date = Column(Date, nullable=False)
+    updated_at = Column(DateTime, default=utc_now)
 
 
 def create_tables() -> None:

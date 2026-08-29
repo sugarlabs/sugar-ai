@@ -8,13 +8,13 @@ import time
 import logging
 import os
 import json
-from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Optional, List
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
+from app.quota import check_and_increment_quota
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -44,30 +44,8 @@ logger = logging.getLogger("sugar-ai")
 # Initialize the agent
 agent = None
 
-# user quotas tracking
-user_quotas: Dict[str, Dict] = {}
-
-def check_quota(api_key: str) -> bool:
-    """Check if a user has exceeded their daily quota"""
-    today = datetime.now().date()
-    
-    if api_key not in user_quotas:
-        user_quotas[api_key] = {"count": 0, "date": today}
-        return True
-        
-    # reset quota daily
-    if user_quotas[api_key]["date"] != today:
-        user_quotas[api_key]["count"] = 0
-        user_quotas[api_key]["date"] = today
-        
-    if user_quotas[api_key]["count"] >= settings.MAX_DAILY_REQUESTS:
-        return False
-        
-    user_quotas[api_key]["count"] += 1
-    return True
-
 def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), request: Request = None):
-    """Verify API key and check quota"""
+    """Verify API key"""
     if not api_key:
         logger.warning(f"API key missing: {request.client.host if request else 'unknown'}")
         raise HTTPException(status_code=401, detail="API key is missing")
@@ -76,45 +54,44 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), req
         logger.warning(f"Invalid API key used: {api_key[:5]}... from {request.client.host if request else 'unknown'}")
         raise HTTPException(status_code=401, detail="Invalid API key")
     
-    if not check_quota(api_key):
-        logger.warning(f"Quota exceeded for user: {settings.API_KEYS[api_key]['name']}")
-        raise HTTPException(status_code=429, detail="Daily request quota exceeded")
-    
     return settings.API_KEYS[api_key]
 
 @router.post("/ask")
 async def ask_question(
     question: str, 
     user_info: dict = Depends(verify_api_key), 
-    request: Request = None
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
     """Process a question using RAG pipeline"""
     start_time = time.time()
     
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
+
+    api_key = request.headers.get("X-API-Key") if request else None
+    if not api_key:
+        api_key = next(
+            key for key, value in settings.API_KEYS.items()
+            if value['name'] == user_info['name']
+        )
+    quota = check_and_increment_quota(api_key, db)
     
+    if agent is None:
+        raise HTTPException(status_code=503, detail="AI agent not initialized")
+
     try:
         answer = agent.run(question)
+
         
         # log completion
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
-        # check quota
-        api_key = next(
-            key for key, value in settings.API_KEYS.items()
-            if value['name'] == user_info['name']
-        )
-        remaining = (
-            settings.MAX_DAILY_REQUESTS
-            - user_quotas.get(api_key, {}).get("count", 0)
-        )
-        
         return {
             "answer": answer, 
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": quota
         }
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
@@ -124,13 +101,22 @@ async def ask_question(
 async def ask_llm(
     question: str, 
     user_info: dict = Depends(verify_api_key), 
-    request: Request = None
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
     """Process a question with direct LLM call (no retrieval)"""
     start_time = time.time()
     
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
+
+    api_key = request.headers.get("X-API-Key") if request else None
+    if not api_key:
+        api_key = next(
+            key for key, value in settings.API_KEYS.items()
+            if value['name'] == user_info['name']
+        )
+    quota = check_and_increment_quota(api_key, db)
     
     try:
         answer = agent.provider.generate(question)
@@ -138,14 +124,10 @@ async def ask_llm(
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
-        # check quota
-        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-        
         return {
             "answer": answer, 
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": quota
         }
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
@@ -155,7 +137,8 @@ async def ask_llm(
 async def ask_llm_prompted(
     request_data: PromptedLLMRequest,
     user_info: dict = Depends(verify_api_key), 
-    request: Request = None
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
     """This endpoint lets you ask a question to the model running on Sugar-AI using custom prompts and also provides options to change model parameters to tune the output.
     RAG is disabled for this endpoint. Set chat=True for chat completions mode.
@@ -164,11 +147,20 @@ async def ask_llm_prompted(
     client_ip = request.client.host if request else "unknown"
     
     # Check quota first
-    api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-    remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
+    api_key = request.headers.get("X-API-Key") if request else None
+    if not api_key:
+        api_key = next(
+            key for key, value in settings.API_KEYS.items()
+            if value['name'] == user_info['name']
+        )
+    quota = check_and_increment_quota(api_key, db)
     
+    if agent is None:
+        raise HTTPException(status_code=503, detail="AI agent not initialized")
+
     try:
         if request_data.chat:
+
             # Chat completions mode
             if not request_data.messages:
                 raise HTTPException(status_code=400, detail="messages field is required when chat=True")
@@ -215,7 +207,7 @@ async def ask_llm_prompted(
                     "finish_reason": "stop"
                 }],
                 "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
+                "quota": quota,
                 "generation_params": {
                     "max_length": request_data.max_length,
                     "truncation": request_data.truncation,
@@ -254,7 +246,7 @@ async def ask_llm_prompted(
             return {
                 "answer": answer, 
                 "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
+                "quota": quota,
                 "generation_params": {
                     "max_length": request_data.max_length,
                     "truncation": request_data.truncation,
@@ -276,13 +268,22 @@ async def debug(
     code: str, 
     context: bool,
     user_info: dict = Depends(verify_api_key), 
-    request: Request = None
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
     """Process python code for debugging"""
     start_time = time.time()
     
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
+
+    api_key = request.headers.get("X-API-Key") if request else None
+    if not api_key:
+        api_key = next(
+            key for key, value in settings.API_KEYS.items()
+            if value['name'] == user_info['name']
+        )
+    quota = check_and_increment_quota(api_key, db)
     
     try:
         response = agent.debug(code, context)
@@ -291,14 +292,10 @@ async def debug(
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
-        # check quota
-        api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
-        remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
-        
         return {
             "answer": answer, 
             "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
+            "quota": quota
         }
         
     except Exception as e:
