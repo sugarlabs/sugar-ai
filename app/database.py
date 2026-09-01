@@ -1,7 +1,7 @@
 """
 Database models and connection handling for Sugar-AI.
 """
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Date, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import datetime
@@ -37,6 +37,16 @@ class APIKey(Base):
             "created_at": self.created_at.isoformat(),
             "approved": self.approved
         }
+
+
+# per-key daily request quota, persisted so it survives restarts/reconnects
+class APIQuota(Base):
+    __tablename__ = "api_quotas"
+
+    api_key = Column(String, primary_key=True, index=True)
+    request_count = Column(Integer, default=0, nullable=False)
+    quota_date = Column(Date, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
 def create_tables() -> None:
