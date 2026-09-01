@@ -14,3 +14,12 @@ templates = Jinja2Templates(directory="templates")
 async def root(request: Request):
     """Serve the root welcome page with links to documentation"""
     return templates.TemplateResponse("welcome.html", {"request": request})
+
+@router.get("/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "service": "Sugar-AI",
+        "version": "1.0"
+    }
+    
