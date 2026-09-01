@@ -132,7 +132,7 @@ async def ask_llm(
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        answer = await agent.provider.generate(question)
+        answer = await agent.generate(question)
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
@@ -330,7 +330,6 @@ async def change_model(
     
     try:
         from app.providers import create_provider
-        from app.config import settings
         new_provider = await run_in_threadpool(
             create_provider,
             provider_name=settings.AI_PROVIDER,
@@ -358,19 +357,21 @@ async def health_check():
         return {"status": "unavailable", "detail": "Agent not initialized"}
 
     try:
-        model_name = agent.provider.get_model_name()
-        is_healthy = await agent.provider.health_check()
+        async with agent.use_provider() as provider:
+            model_name = provider.get_model_name()
+            provider_name = type(provider).__name__
+            is_healthy = await provider.health_check()
 
         if is_healthy:
             return {
                 "status": "healthy",
-                "provider": type(agent.provider).__name__,
+                "provider": provider_name,
                 "model": model_name,
             }
         else:
             return {
                 "status": "unhealthy",
-                "provider": type(agent.provider).__name__,
+                "provider": provider_name,
                 "model": model_name,
                 "detail": "Health check failed",
             }
