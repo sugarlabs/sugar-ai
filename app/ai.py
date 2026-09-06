@@ -15,14 +15,15 @@
 
 """RAG and LLM components for Sugar-AI."""
 import os
+import math
+import logging
+from typing import Optional, List, Dict, Any
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
-from typing import Optional, List
 import app.prompts as prompts
 from app.config import settings
 from app.providers.base import BaseProvider, GenerationParams
-import logging
 
 logger = logging.getLogger("sugar-ai")
 
@@ -33,6 +34,148 @@ EOS_TOKENS = (
     "</s>",
     "<eos>",
 )
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate the number of tokens in a text string.
+    
+    Uses standard character and word heuristics (~4 chars/token).
+    Returns 0 for empty or None text.
+    """
+    if not text:
+        return 0
+    # 1 token is roughly ~4 characters for standard English / code
+    return max(1, math.ceil(len(text) / 4.0))
+
+
+def estimate_message_tokens(message: dict) -> int:
+    """Estimate token count for a single message dictionary.
+    
+    Includes role and framing delimiters overhead (~4 tokens).
+    """
+    if not message:
+        return 0
+    role = str(message.get("role", ""))
+    content = str(message.get("content", ""))
+    # Role + content + 4 tokens overhead per message
+    return estimate_tokens(role) + estimate_tokens(content) + 4
+
+
+def estimate_messages_tokens(messages: list[dict]) -> int:
+    """Estimate total token count for a list of chat message dictionaries."""
+    if not messages:
+        return 0
+    # Sum of message tokens + 2 tokens for assistant prefix priming
+    return sum(estimate_message_tokens(m) for m in messages) + 2
+
+
+def budget_conversation_history(
+    messages: list[dict],
+    max_tokens: int = 4096,
+    reserve_for_response: int = 0,
+) -> list[dict]:
+    """Prune conversation history to fit within a token budget using a sliding window.
+    
+    Strategy:
+    1. System messages are prioritized and preserved at the front of history.
+    2. The latest conversation turns (from newest to oldest) are preserved.
+    3. Oldest conversation turns exceeding the remaining budget are dropped.
+    4. If the latest message alone exceeds the remaining budget, its content
+       is truncated to fit within the available budget.
+       
+    Args:
+        messages: List of message dicts with 'role' and 'content'.
+        max_tokens: Maximum allowable total tokens.
+        reserve_for_response: Tokens reserved for model generation output.
+        
+    Returns:
+        Budgeted list of message dicts preserving chronological order.
+    """
+    if not messages:
+        return []
+
+    # Calculate effective budget available for input messages
+    effective_budget = max(128, max_tokens - max(0, reserve_for_response))
+
+    # Fast path: check if total message tokens already fit
+    total_tokens = estimate_messages_tokens(messages)
+    if total_tokens <= effective_budget:
+        return [dict(m) for m in messages]
+
+    logger.info(
+        "Conversation token count (%d) exceeds budget (%d, reserved=%d). Trimming context...",
+        total_tokens,
+        effective_budget,
+        reserve_for_response,
+    )
+
+    # Separate system messages and non-system messages
+    system_messages: list[dict] = []
+    conversation_messages: list[dict] = []
+
+    for msg in messages:
+        if msg.get("role") == "system":
+            system_messages.append(dict(msg))
+        else:
+            conversation_messages.append(dict(msg))
+
+    # Calculate tokens used by system messages
+    sys_tokens = sum(estimate_message_tokens(m) for m in system_messages) + 2
+
+    # If system messages themselves exceed or nearly exhaust the budget, truncate system prompt
+    if sys_tokens >= effective_budget:
+        logger.warning(
+            "System prompt tokens (%d) exceed or match budget (%d). Truncating system prompt.",
+            sys_tokens,
+            effective_budget,
+        )
+        avail_sys_tokens = max(64, effective_budget // 2)
+        budgeted_sys: list[dict] = []
+        for sm in system_messages:
+            content = sm.get("content", "")
+            char_limit = avail_sys_tokens * 4
+            truncated_content = content[:char_limit]
+            budgeted_sys.append({"role": sm.get("role", "system"), "content": truncated_content})
+        system_messages = budgeted_sys
+        sys_tokens = sum(estimate_message_tokens(m) for m in system_messages) + 2
+
+    remaining_budget = max(64, effective_budget - sys_tokens)
+
+    # Sliding window on conversation messages: newest to oldest
+    selected_conv_messages: list[dict] = []
+    accumulated_tokens = 0
+
+    for msg in reversed(conversation_messages):
+        msg_tokens = estimate_message_tokens(msg)
+        if accumulated_tokens + msg_tokens <= remaining_budget:
+            selected_conv_messages.append(dict(msg))
+            accumulated_tokens += msg_tokens
+        else:
+            # If we couldn't even fit the single newest message, truncate its content
+            if not selected_conv_messages:
+                content = msg.get("content", "")
+                avail_content_tokens = max(16, remaining_budget - 8)
+                char_limit = avail_content_tokens * 4
+                truncated_content = content[-char_limit:] if len(content) > char_limit else content
+                selected_conv_messages.append({
+                    "role": msg.get("role", "user"),
+                    "content": truncated_content
+                })
+                accumulated_tokens += estimate_message_tokens(selected_conv_messages[-1])
+            break
+
+    # Restore chronological order
+    selected_conv_messages.reverse()
+
+    result = system_messages + selected_conv_messages
+    logger.info(
+        "Budgeted conversation from %d to %d messages (estimated tokens: %d / %d).",
+        len(messages),
+        len(result),
+        estimate_messages_tokens(result),
+        effective_budget,
+    )
+    return result
 
 
 def format_docs(docs):
@@ -122,13 +265,21 @@ class RAGAgent:
             kid_friendly = self.provider.generate(kids_prompt)
             return kid_friendly
 
-    def run(self, question: str) -> str:
-        """Process a question through the RAG pipeline."""
+    def run(self, question: str, max_context_tokens: Optional[int] = None) -> str:
+        """Process a question through the RAG pipeline with context budgeting."""
+        budget = max_context_tokens or getattr(settings, "MAX_CONTEXT_TOKENS", 4096)
+        effective_budget = max(256, budget - 1024)
+
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
+            context_text = doc_result.page_content
+            # Ensure retrieved document context fits within half the effective budget
+            if estimate_tokens(context_text) > (effective_budget // 2):
+                char_limit = (effective_budget // 2) * 4
+                context_text = context_text[:char_limit] + "..."
             prompt = self.prompt_template.format(
                 question=question,
-                context=doc_result.page_content
+                context=context_text
             )
         else:
             prompt = self.prompt_template.format(
@@ -152,10 +303,21 @@ class RAGAgent:
         return final_response
 
     def run_with_custom_prompt(self, question: str, custom_prompt: str,
-                               params: Optional[GenerationParams] = None) -> str:
-        """Process a question with custom prompt and parameters (no RAG)."""
+                               params: Optional[GenerationParams] = None,
+                               max_context_tokens: Optional[int] = None) -> str:
+        """Process a question with custom prompt and parameters (no RAG) with context budgeting."""
         params = params or GenerationParams()
+        budget = max_context_tokens or getattr(settings, "MAX_CONTEXT_TOKENS", 4096)
+        reserve = params.max_new_tokens if params else 1024
+        effective_budget = max(128, budget - reserve)
+
         full_prompt = f"{custom_prompt}\n\nQuestion: {question}\nAnswer:"
+        if estimate_tokens(full_prompt) > effective_budget:
+            q_tokens = estimate_tokens(question)
+            avail_prompt_tokens = max(64, effective_budget - q_tokens - 32)
+            char_limit = avail_prompt_tokens * 4
+            custom_prompt_truncated = custom_prompt[:char_limit] + "..."
+            full_prompt = f"{custom_prompt_truncated}\n\nQuestion: {question}\nAnswer:"
 
         try:
             answer = self.provider.generate(full_prompt, params)
@@ -169,12 +331,21 @@ class RAGAgent:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
 
     def run_chat_completion(self, messages: list,
-                            params: Optional[GenerationParams] = None) -> str:
-        """Process chat messages using the provider's chat interface."""
+                            params: Optional[GenerationParams] = None,
+                            max_context_tokens: Optional[int] = None) -> str:
+        """Process chat messages using the provider's chat interface with context budgeting."""
         params = params or GenerationParams()
+        budget = max_context_tokens or getattr(settings, "MAX_CONTEXT_TOKENS", 4096)
+        reserve = params.max_new_tokens if params else 1024
+
+        budgeted_messages = budget_conversation_history(
+            messages=messages,
+            max_tokens=budget,
+            reserve_for_response=reserve,
+        )
 
         try:
-            answer = self.provider.chat(messages, params)
+            answer = self.provider.chat(budgeted_messages, params)
             return answer
         except Exception as e:
             raise Exception(f"Error generating chat completion: {str(e)}")
