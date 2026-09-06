@@ -20,8 +20,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from typing import Optional, List
 import app.prompts as prompts
-from app.config import settings
 from app.providers.base import BaseProvider, GenerationParams
+from app.context import ContextBudget, fit_text
 import logging
 
 logger = logging.getLogger("sugar-ai")
@@ -125,16 +125,40 @@ class RAGAgent:
     def run(self, question: str) -> str:
         """Process a question through the RAG pipeline."""
         doc_result, _ = self.get_relevant_document(question)
-        if doc_result:
-            prompt = self.prompt_template.format(
-                question=question,
-                context=doc_result.page_content
-            )
-        else:
-            prompt = self.prompt_template.format(
-                question=question,
-                context="No relevant documentation found."
-            )
+        retrieved_context = (
+            doc_result.page_content
+            if doc_result
+            else "No relevant documentation found."
+        )
+
+        # Reserve output space and account for the question/template before
+        # inserting retrieved text. The provider performs a final whole-prompt
+        # check, but budgeting retrieval here prevents relevant context from
+        # consuming the entire input window first.
+        empty_context_prompt = self.prompt_template.format(
+            question=question,
+            context="",
+        )
+        default_output = GenerationParams().max_new_tokens
+        context_budget = ContextBudget(
+            context_window=self.provider.get_context_window(),
+            output_tokens=min(default_output, self.provider.get_context_window() - 1),
+        )
+        retrieval_tokens = max(
+            1,
+            # Match the per-message framing overhead used by _message_tokens.
+            context_budget.input_tokens - self.provider.count_tokens(empty_context_prompt) - 4,
+        )
+        retrieved_context = fit_text(
+            retrieved_context,
+            ContextBudget(retrieval_tokens, 0),
+            counter=self.provider.count_tokens,
+        )
+
+        prompt = self.prompt_template.format(
+            question=question,
+            context=retrieved_context,
+        )
 
         first_response = self.provider.generate(prompt)
 

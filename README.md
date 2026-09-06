@@ -34,6 +34,35 @@ The container starts by executing `main.py`. To change the startup behavior, upd
 
 The FastAPI server provides endpoints to interact with Sugar-AI.
 
+### Running the regression suite
+
+Install the development dependencies and run the tests with:
+
+```sh
+pip install -r requirements-test.txt
+python -m pytest -q
+```
+
+The same command runs automatically in GitHub Actions for pushes and pull
+requests.
+
+### Context-window handling
+
+Before generation, Sugar-AI reserves space for the requested output and fits
+plain prompts or chat history into the active provider's context window. Older
+chat turns are represented by a deterministic compressed summary, while recent
+turns and system instructions are retained. The frontend can read the active
+limits from `GET /model-metadata`; the backend remains authoritative. Hugging
+Face providers use the tokenizer's advertised limit when available. Other
+providers use `AI_CONTEXT_WINDOW` (default `4096`) when their server does not
+publish model capabilities.
+
+This work supersedes the narrower scope of [PR #131](https://github.com/sugarlabs/sugar-ai/pull/131),
+which remains open and focuses on replacing `max_length` with `max_new_tokens`
+and adding basic chat budgeting. The implementation here retains that output
+token safety while also covering the default Hugging Face path, provider
+tokenizer counting, retrieved RAG context, and frontend metadata.
+
 ### Install dependencies
 
 ```sh

@@ -2,17 +2,12 @@
 API routes for Sugar-AI.
 """
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 import time
 import logging
-import os
-import json
 from datetime import datetime
 from typing import Dict, Optional, List
 
-from app.database import get_db, APIKey
-from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
 
@@ -359,6 +354,7 @@ async def health_check():
 
     try:
         model_name = agent.provider.get_model_name()
+        metadata = agent.provider.get_model_metadata()
         is_healthy = agent.provider.health_check()
 
         if is_healthy:
@@ -366,12 +362,14 @@ async def health_check():
                 "status": "healthy",
                 "provider": type(agent.provider).__name__,
                 "model": model_name,
+                "context": metadata,
             }
         else:
             return {
                 "status": "unhealthy",
                 "provider": type(agent.provider).__name__,
                 "model": model_name,
+                "context": metadata,
                 "detail": "Health check failed",
             }
     except Exception as e:
@@ -380,3 +378,11 @@ async def health_check():
             "status": "error",
             "detail": str(e),
         }
+
+
+@router.get("/model-metadata")
+async def model_metadata():
+    """Return model limits needed for client-side input guardrails."""
+    if agent is None:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    return agent.provider.get_model_metadata()

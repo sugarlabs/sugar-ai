@@ -65,6 +65,8 @@ class GeminiProvider(BaseProvider):
         """Generate a response from chat messages."""
         if params is None:
             params = GenerationParams()
+        params = self.bound_params(params)
+        messages = self.prepare_messages(messages, params)
 
         contents, system_instruction = self._to_gemini_contents(messages)
 

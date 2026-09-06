@@ -21,8 +21,14 @@ import logging
 from typing import Optional
 
 from app.providers.base import BaseProvider, GenerationParams
+from app.context import estimate_tokens
 
 logger = logging.getLogger("sugar-ai")
+
+# Hugging Face tokenizers report an enormous placeholder value (commonly
+# 1e30-scale) when no real model_max_length was configured. Values below this
+# threshold are treated as real, usable context limits.
+_UNSET_MODEL_MAX_LENGTH_THRESHOLD = 1_000_000
 
 
 class HuggingFaceProvider(BaseProvider):
@@ -68,13 +74,43 @@ class HuggingFaceProvider(BaseProvider):
                 device=device,
             )
 
+        model_limit = getattr(self._pipeline.tokenizer, "model_max_length", None)
+        self._context_window = (
+            int(model_limit)
+            if isinstance(model_limit, int)
+            and 0 < model_limit < _UNSET_MODEL_MAX_LENGTH_THRESHOLD
+            else None
+        )
+
         logger.info("HuggingFaceProvider loaded model: %s (quantized=%s, device=%s)",
                     model_name, use_quant, device)
+
+    def get_context_window(self) -> int:
+        """Prefer the tokenizer's advertised model limit when it is reliable."""
+        return self._context_window or super().get_context_window()
+
+    def count_tokens(self, text: str) -> int:
+        """Count tokens with the loaded model tokenizer when possible."""
+        try:
+            encoded = self._pipeline.tokenizer(
+                text,
+                add_special_tokens=False,
+                truncation=False,
+            )
+            input_ids = encoded["input_ids"]
+            return len(input_ids[0]) if input_ids and isinstance(input_ids[0], list) else len(input_ids)
+        except Exception as exc:
+            # Some lightweight test doubles and unusual tokenizers do not
+            # support the full call signature; retain a safe fallback.
+            logger.debug("Hugging Face tokenizer failed during budgeting: %s", exc)
+            return estimate_tokens(text)
 
     def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
         """Generate text from a plain string prompt."""
         if params is None:
             params = GenerationParams()
+        params = self.bound_params(params)
+        prompt = self.prepare_prompt(prompt, params)
 
         response = self._pipeline(
             prompt,
@@ -98,6 +134,8 @@ class HuggingFaceProvider(BaseProvider):
         """Generate response from chat messages."""
         if params is None:
             params = GenerationParams()
+        params = self.bound_params(params)
+        messages = self.prepare_messages(messages, params)
 
         normalized = self._normalize_chat_messages(messages)
         full_prompt = self._pipeline.tokenizer.apply_chat_template(
@@ -140,11 +178,11 @@ class HuggingFaceProvider(BaseProvider):
 
     def _normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
         """Normalize messages for model-specific requirements."""
-        system_content = ""
-        for msg in messages:
-            if msg.get("role") == "system" and msg.get("content"):
-                system_content = msg["content"]
-                break
+        system_content = "\n\n".join(
+            msg["content"]
+            for msg in messages
+            if msg.get("role") == "system" and msg.get("content")
+        )
 
         non_system_messages = [msg for msg in messages if msg.get("role") != "system"]
         if not non_system_messages:

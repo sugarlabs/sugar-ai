@@ -1,0 +1,9 @@
+pytest>=8.0
+fastapi
+sqlalchemy
+authlib
+itsdangerous
+jinja2
+python-multipart
+pydantic-settings
+httpx

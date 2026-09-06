@@ -9,6 +9,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const apiKeyField = document.getElementById('api-key-field');
     const toggleApiKeyBtn = document.getElementById('toggle-api-key');
     const copyApiKeyBtn = document.getElementById('copy-api-key');
+    const contextWarning = document.getElementById('context-warning');
+    let safeInputTokens = 3072;
+
+    // The backend owns the active model limit. The client only estimates tokens
+    // for an early warning; the provider performs the authoritative fitting.
+    fetch('/model-metadata', { credentials: 'same-origin' })
+        .then(response => response.ok ? response.json() : null)
+        .then(metadata => {
+            if (metadata && metadata.safe_input_tokens) {
+                safeInputTokens = metadata.safe_input_tokens;
+            }
+        })
+        .catch(() => {});
     
     // New elements for endpoint selection
     const endpointRadios = document.querySelectorAll('input[name="endpoint-choice"]');
@@ -148,6 +161,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // send a message to the API
     async function sendMessage(message) {
+        const estimatedTokens = Math.ceil(message.length / 4);
+        if (contextWarning && estimatedTokens > safeInputTokens) {
+            contextWarning.textContent = `This message is about ${estimatedTokens} tokens; the model input budget is ${safeInputTokens}. It will be shortened automatically.`;
+            contextWarning.style.display = 'block';
+        } else if (contextWarning) {
+            contextWarning.style.display = 'none';
+        }
         addUserMessage(message);
         
         const typingIndicator = showTypingIndicator();

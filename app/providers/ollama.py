@@ -51,6 +51,8 @@ class OllamaProvider(BaseProvider):
         """Generate text from a plain string prompt."""
         if params is None:
             params = GenerationParams()
+        params = self.bound_params(params)
+        prompt = self.prepare_prompt(prompt, params)
 
         payload = {
             "model": self.model_name,
@@ -72,6 +74,8 @@ class OllamaProvider(BaseProvider):
         """Generate response from chat messages."""
         if params is None:
             params = GenerationParams()
+        params = self.bound_params(params)
+        messages = self.prepare_messages(messages, params)
 
         payload = {
             "model": self.model_name,

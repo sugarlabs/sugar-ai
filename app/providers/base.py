@@ -17,8 +17,11 @@
 """Base provider interface for Sugar-AI."""
 import httpx
 import logging
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, replace
 from typing import Optional
+
+from app.context import ContextBudget, estimate_tokens, fit_messages, fit_text
 
 logger = logging.getLogger("sugar-ai")
 
@@ -73,14 +76,60 @@ class BaseProvider:
             self.base_url,
         )
 
+    def get_context_window(self) -> int:
+        """Return the model context window, with a portable safe default."""
+        return max(1, int(os.getenv("AI_CONTEXT_WINDOW", "4096")))
+
+    def get_model_metadata(self) -> dict:
+        """Expose model limits to the runtime and frontend."""
+        max_output = min(1024, max(1, self.get_context_window() - 1))
+        return {
+            "model": self.get_model_name(),
+            "provider": type(self).__name__,
+            "context_window": self.get_context_window(),
+            "max_output_tokens": max_output,
+            "safe_input_tokens": self.get_context_window() - max_output,
+        }
+
+    def count_tokens(self, text: str) -> int:
+        """Count tokens for budgeting; providers may use an exact tokenizer."""
+        return estimate_tokens(text)
+
+    def prepare_messages(self, messages: list[dict], params: GenerationParams) -> list[dict]:
+        """Compress older turns so input plus output fits the model window."""
+        budget = ContextBudget(
+            context_window=self.get_context_window(),
+            output_tokens=min(params.max_new_tokens, self.get_context_window() - 1),
+        )
+        return fit_messages(messages, budget, counter=self.count_tokens)
+
+    def bound_params(self, params: GenerationParams) -> GenerationParams:
+        """Clamp output tokens so input and output cannot exceed the window."""
+        return replace(
+            params,
+            max_new_tokens=min(params.max_new_tokens, self.get_context_window() - 1),
+        )
+
+    def prepare_prompt(self, prompt: str, params: GenerationParams) -> str:
+        """Trim a plain prompt so an output reservation is always preserved."""
+        budget = ContextBudget(
+            context_window=self.get_context_window(),
+            output_tokens=min(params.max_new_tokens, self.get_context_window() - 1),
+        )
+        return fit_text(prompt, budget, counter=self.count_tokens)
+
     def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
         """Generate text from a plain prompt by wrapping it as a user message."""
+        params = params or GenerationParams()
+        prompt = self.prepare_prompt(prompt, params)
         return self.chat([{"role": "user", "content": prompt}], params)
 
     def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
         """Generate a response from chat messages via /chat/completions."""
         if params is None:
             params = GenerationParams()
+        params = self.bound_params(params)
+        messages = self.prepare_messages(messages, params)
 
         payload = {
             "model": self.model_name,
