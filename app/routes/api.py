@@ -30,6 +30,7 @@ class PromptedLLMRequest(BaseModel):
     
     # Boundary validation added below:
     max_length: int = Field(1024, gt=0, le=8192, description="Maximum length of generated text")
+    max_context_tokens: Optional[int] = Field(None, ge=128, le=65536, description="Maximum context window token budget")
     truncation: bool = Field(True, description="Whether to truncate input if too long")
     repetition_penalty: float = Field(1.1, gt=0.0, le=2.0, description="Repetition penalty")
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for sampling")
@@ -199,6 +200,7 @@ async def ask_llm_prompted(
             answer = agent.run_chat_completion(
                 messages=messages_dict,
                 params=params,
+                max_context_tokens=request_data.max_context_tokens,
             )
             
             process_time = time.time() - start_time
@@ -218,6 +220,7 @@ async def ask_llm_prompted(
                 "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
                 "generation_params": {
                     "max_length": request_data.max_length,
+                    "max_context_tokens": request_data.max_context_tokens,
                     "truncation": request_data.truncation,
                     "repetition_penalty": request_data.repetition_penalty,
                     "temperature": request_data.temperature,
@@ -246,6 +249,7 @@ async def ask_llm_prompted(
                 question=request_data.question,
                 custom_prompt=request_data.custom_prompt,
                 params=params,
+                max_context_tokens=request_data.max_context_tokens,
             )
             
             process_time = time.time() - start_time
@@ -257,6 +261,7 @@ async def ask_llm_prompted(
                 "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
                 "generation_params": {
                     "max_length": request_data.max_length,
+                    "max_context_tokens": request_data.max_context_tokens,
                     "truncation": request_data.truncation,
                     "repetition_penalty": request_data.repetition_penalty,
                     "temperature": request_data.temperature,
