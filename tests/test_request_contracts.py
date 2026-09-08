@@ -45,6 +45,12 @@ class FakeAgent:
     def debug(self, code, context):
         return f"debug answer context={context}"
 
+    def run_with_custom_prompt(self, question, custom_prompt, params=None):
+        return "prompted answer"
+
+    def run_chat_completion(self, messages, params=None):
+        return "chat answer"
+
 
 @pytest.fixture(scope="module")
 def client():
@@ -139,3 +145,60 @@ def test_wrong_type_is_rejected(client):
     assert_validation_error(
         client.post("/ask", json={"question": {"nested": "object"}}, headers=HEADERS)
     )
+
+
+# --- ask-llm-prompted mode rules -------------------------------------------
+
+
+def test_prompted_mode_needs_question_and_custom_prompt(client):
+    response = client.post(
+        "/ask-llm-prompted",
+        json={"chat": False, "question": "hi", "custom_prompt": "be nice"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json()["answer"] == "prompted answer"
+
+
+@pytest.mark.parametrize(
+    "payload, missing",
+    [
+        ({"chat": False}, ["question", "custom_prompt"]),
+        ({"chat": False, "question": "hi"}, ["custom_prompt"]),
+        ({"chat": False, "custom_prompt": "be nice"}, ["question"]),
+    ],
+)
+def test_prompted_mode_rejects_missing_fields(client, payload, missing):
+    message = assert_validation_error(
+        client.post("/ask-llm-prompted", json=payload, headers=HEADERS)
+    )
+    for name in missing:
+        assert name in message
+
+
+def test_chat_mode_needs_messages(client):
+    response = client.post(
+        "/ask-llm-prompted",
+        json={"chat": True, "messages": [{"role": "user", "content": "hi"}]},
+        headers=HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "chat answer"
+
+
+@pytest.mark.parametrize("payload", [{"chat": True}, {"chat": True, "messages": []}])
+def test_chat_mode_rejects_missing_messages(client, payload):
+    message = assert_validation_error(
+        client.post("/ask-llm-prompted", json=payload, headers=HEADERS)
+    )
+    assert "messages" in message
+
+
+def test_chat_mode_ignores_prompted_fields(client):
+    """chat=True does not need question/custom_prompt even if absent."""
+    response = client.post(
+        "/ask-llm-prompted",
+        json={"chat": True, "messages": [{"role": "user", "content": "hi"}], "temperature": 0.1},
+        headers=HEADERS,
+    )
+    assert response.status_code == 200

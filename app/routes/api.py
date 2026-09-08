@@ -17,7 +17,12 @@ from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
-from app.schemas.requests import AskRequest, DebugRequest
+from app.schemas.requests import (
+    AskRequest,
+    ChatMessage,
+    DebugRequest,
+    PromptedLLMRequest,
+)
 from app.schemas import (
     AskResponse,
     ChatChoice,
@@ -38,26 +43,6 @@ ERROR_RESPONSES = {
     429: {"model": ErrorResponse},
     500: {"model": ErrorResponse},
 }
-
-# Pydantic models for chat completions
-class ChatMessage(BaseModel):
-    role: str  # "system", "user", "assistant" 
-    content: str
-
-class PromptedLLMRequest(BaseModel):
-    """Request model for ask-llm-prompted endpoint"""
-    chat: bool = Field(False, description="Enable chat mode (uses messages instead of question)")
-    question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
-    custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
-    messages: Optional[List[ChatMessage]] = Field(None, description="List of chat messages (required if chat=True)")
-    
-    # Boundary validation added below:
-    max_length: int = Field(1024, gt=0, le=8192, description="Maximum length of generated text")
-    truncation: bool = Field(True, description="Whether to truncate input if too long")
-    repetition_penalty: float = Field(1.1, gt=0.0, le=2.0, description="Repetition penalty")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for sampling")
-    top_p: float = Field(0.9, gt=0.0, le=1.0, description="Top-p (nucleus) sampling parameter")
-    top_k: int = Field(50, ge=0, description="Top-k sampling parameter")
 
 router = APIRouter(tags=["api"])
 
@@ -247,10 +232,7 @@ async def ask_llm_prompted(
     
     try:
         if request_data.chat:
-            # Chat completions mode
-            if not request_data.messages:
-                raise HTTPException(status_code=400, detail="messages field is required when chat=True")
-            
+            # Chat completions mode; the request model guarantees messages exist.
             # Log the last user message for tracking
             user_messages = [msg for msg in request_data.messages if msg.role == "user"]
             last_user_msg = user_messages[-1].content if user_messages else "No user message"
@@ -296,10 +278,7 @@ async def ask_llm_prompted(
                 generation_params=_generation_params_info(request_data),
             )
         else:
-            # Prompted mode
-            if not request_data.question or not request_data.custom_prompt:
-                raise HTTPException(status_code=400, detail="question and custom_prompt fields are required when chat=False")
-            
+            # Prompted mode; the request model guarantees question and custom_prompt.
             logger.info(f"REQUEST - /ask-llm-prompted - User: {user_info['name']} - IP: {client_ip} - Question: {request_data.question[:200]}...")
             logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
             
