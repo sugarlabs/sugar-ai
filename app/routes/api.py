@@ -1,9 +1,9 @@
 """
 API routes for Sugar-AI.
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Header, Query, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 import time
 import logging
 import os
@@ -17,6 +17,7 @@ from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
+from app.schemas.requests import AskRequest, DebugRequest
 from app.schemas import (
     AskResponse,
     ChatChoice,
@@ -104,15 +105,51 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), req
     
     return settings.API_KEYS[api_key]
 
+def _resolve_ask(body: Optional[AskRequest], question: Optional[str]) -> AskRequest:
+    """Take the JSON body, else fall back to the legacy ?question= parameter."""
+    if body is not None:
+        return body
+    if question is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "validation_error",
+                "message": "question is required, in the JSON body or as a query parameter",
+            },
+        )
+    try:
+        return AskRequest(question=question)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "message": _first_error(e)},
+        )
+
+
+def _first_error(exc: ValidationError) -> str:
+    """Render a Pydantic error the same way the request-validation handler does."""
+    errors = exc.errors()
+    if not errors:
+        return "Invalid request"
+    first = errors[0]
+    location = ".".join(str(part) for part in first.get("loc", []))
+    message = first.get("msg", "Invalid request")
+    return f"{location}: {message}" if location else message
+
+
 @router.post("/ask", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def ask_question(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    body: Optional[AskRequest] = Body(None),
+    question: Optional[str] = Query(
+        None, description="Deprecated: send a JSON body instead"
+    ),
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process a question using RAG pipeline"""
     start_time = time.time()
-    
+    question = _resolve_ask(body, question).question
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
@@ -144,13 +181,17 @@ async def ask_question(
 
 @router.post("/ask-llm", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def ask_llm(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    body: Optional[AskRequest] = Body(None),
+    question: Optional[str] = Query(
+        None, description="Deprecated: send a JSON body instead"
+    ),
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process a question with direct LLM call (no retrieval)"""
     start_time = time.time()
-    
+    question = _resolve_ask(body, question).question
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
@@ -295,14 +336,35 @@ async def ask_llm_prompted(
         
 @router.post("/debug", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def debug(
-    code: str, 
-    context: bool,
-    user_info: dict = Depends(verify_api_key), 
+    body: Optional[DebugRequest] = Body(None),
+    code: Optional[str] = Query(None, description="Deprecated: send a JSON body instead"),
+    context: Optional[bool] = Query(
+        None, description="Deprecated: send a JSON body instead"
+    ),
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process python code for debugging"""
     start_time = time.time()
-    
+
+    if body is None:
+        if code is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "validation_error",
+                    "message": "code is required, in the JSON body or as a query parameter",
+                },
+            )
+        try:
+            body = DebugRequest(code=code, context=bool(context))
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "validation_error", "message": _first_error(e)},
+            )
+    code, context = body.code, body.context
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     

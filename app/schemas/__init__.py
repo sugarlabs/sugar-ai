@@ -18,6 +18,7 @@ Schema package for Sugar-AI.
 
 Pydantic models that define the API's input and output contracts.
 """
+from app.schemas.requests import AskRequest, DebugRequest
 from app.schemas.responses import (
     AskResponse,
     ChatChoice,
@@ -33,6 +34,8 @@ from app.schemas.responses import (
 )
 
 __all__ = [
+    "AskRequest",
+    "DebugRequest",
     "AskResponse",
     "ChatChoice",
     "ChatCompletionResponse",
