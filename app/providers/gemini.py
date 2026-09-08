@@ -17,7 +17,7 @@
 """Google Gemini provider for Sugar-AI."""
 import httpx
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
 from app.providers.base import BaseProvider, GenerationParams
 
@@ -34,11 +34,16 @@ class GeminiProvider(BaseProvider):
     can serve any Gemini model. Only base_url and api_key differ per setup.
     """
 
+    # Gemini's generateContent takes images and audio inline on every
+    # current multimodal model.
+    default_modalities = frozenset({"text", "image", "audio"})
+
     def __init__(
         self,
         model_name: str,
         api_key: str,
         base_url: str = _DEFAULT_BASE_URL,
+        supported_modalities: Optional[Iterable[str]] = None,
     ):
         if not api_key:
             raise ValueError(
@@ -47,6 +52,7 @@ class GeminiProvider(BaseProvider):
             )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
+        self.set_supported_modalities(supported_modalities)
         self._client = httpx.Client(
             timeout=_DEFAULT_TIMEOUT,
             headers={

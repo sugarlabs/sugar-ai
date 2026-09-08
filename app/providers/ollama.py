@@ -17,7 +17,7 @@
 """Ollama REST API provider for Sugar-AI."""
 import httpx
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
 from app.providers.base import BaseProvider, GenerationParams
 
@@ -36,10 +36,20 @@ class OllamaProvider(BaseProvider):
     The only difference is the base_url.
     """
 
-    def __init__(self, model_name: str, base_url: str = "http://localhost:11434"):
+    # Ollama's chat API carries images per message. It has no audio input,
+    # so a request with a recording is refused before it is sent.
+    default_modalities = frozenset({"text", "image"})
+
+    def __init__(
+        self,
+        model_name: str,
+        base_url: str = "http://localhost:11434",
+        supported_modalities: Optional[Iterable[str]] = None,
+    ):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(timeout=_DEFAULT_TIMEOUT)
+        self.set_supported_modalities(supported_modalities)
 
         logger.info(
             "OllamaProvider initialized: model=%s, server=%s",

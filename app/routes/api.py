@@ -200,6 +200,28 @@ async def ask_llm(
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
+def _require_supported_modalities(messages) -> None:
+    """Refuse a request whose media the active provider cannot accept."""
+    requested = set()
+    for message in messages:
+        requested |= message.modalities()
+
+    supported = getattr(agent.provider, "supported_modalities", {"text"})
+    unsupported = sorted(requested - set(supported))
+    if unsupported:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "modality_not_supported",
+                "message": (
+                    f"{agent.provider.get_model_name()} does not accept "
+                    f"{', '.join(unsupported)} input; it accepts "
+                    f"{', '.join(sorted(supported))}"
+                ),
+            },
+        )
+
+
 def _generation_params_info(request_data: PromptedLLMRequest) -> GenerationParamsInfo:
     """Echo the generation parameters a request was served with."""
     return GenerationParamsInfo(
@@ -234,6 +256,8 @@ async def ask_llm_prompted(
     try:
         if request_data.chat:
             # Chat completions mode; the request model guarantees messages exist.
+            _require_supported_modalities(request_data.messages)
+
             # Log the last user message for tracking
             user_messages = [msg for msg in request_data.messages if msg.role == "user"]
             last_user_msg = user_messages[-1].text() if user_messages else "No user message"
@@ -406,6 +430,7 @@ async def change_model(
             openai_base_url=settings.OPENAI_BASE_URL,
             gemini_api_key=settings.GEMINI_API_KEY,
             gemini_base_url=settings.GEMINI_BASE_URL,
+            supported_modalities=settings.supported_modalities(),
         )
         agent.set_model(new_provider)
         logger.info(f"Model changed to {model} by {user_info['name']}")
@@ -427,18 +452,21 @@ async def health_check():
     try:
         model_name = agent.provider.get_model_name()
         is_healthy = agent.provider.health_check()
+        modalities = sorted(getattr(agent.provider, "supported_modalities", {"text"}))
 
         if is_healthy:
             return HealthResponse(
                 status="healthy",
                 provider=type(agent.provider).__name__,
                 model=model_name,
+                modalities=modalities,
             )
         else:
             return HealthResponse(
                 status="unhealthy",
                 provider=type(agent.provider).__name__,
                 model=model_name,
+                modalities=modalities,
                 detail="Health check failed",
             )
     except Exception as e:

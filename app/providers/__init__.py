@@ -41,18 +41,21 @@ def create_provider(
 ) -> BaseProvider:
     """Build a configured model provider by name."""
     name = provider_name.lower().strip()
+    modalities = kwargs.get("supported_modalities")
 
     if name == "huggingface":
         return HuggingFaceProvider(
             model_name=model_name,
             quantize=kwargs.get("quantize", True),
             dev_mode=kwargs.get("dev_mode", False),
+            supported_modalities=modalities,
         )
 
     if name == "ollama":
         return OllamaProvider(
             model_name=model_name,
             base_url=kwargs.get("base_url", "http://localhost:11434"),
+            supported_modalities=modalities,
         )
 
     if name in ("openai", "openai-compatible", "openai_compatible"):
@@ -60,6 +63,7 @@ def create_provider(
             model_name=model_name,
             api_key=kwargs.get("api_key"),
             base_url=kwargs.get("openai_base_url", "https://api.openai.com/v1"),
+            supported_modalities=modalities,
         )
 
     if name == "gemini":
@@ -70,6 +74,7 @@ def create_provider(
                 "gemini_base_url",
                 "https://generativelanguage.googleapis.com/v1beta",
             ),
+            supported_modalities=modalities,
         )
 
     raise ValueError(

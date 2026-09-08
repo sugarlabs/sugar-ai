@@ -18,9 +18,9 @@
 import torch
 from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
-from app.providers.base import BaseProvider, GenerationParams
+from app.providers.base import BaseProvider, GenerationParams, TEXT_ONLY
 
 logger = logging.getLogger("sugar-ai")
 
@@ -28,10 +28,20 @@ logger = logging.getLogger("sugar-ai")
 class HuggingFaceProvider(BaseProvider):
     """Provider running HuggingFace models locally via transformers."""
 
-    def __init__(self, model_name: str, quantize: bool = True, dev_mode: bool = False):
+    # The text-generation pipeline takes text only.
+    default_modalities = TEXT_ONLY
+
+    def __init__(
+        self,
+        model_name: str,
+        quantize: bool = True,
+        dev_mode: bool = False,
+        supported_modalities: Optional[Iterable[str]] = None,
+    ):
         """Load a HuggingFace model into memory."""
         self.model_name = model_name
         self._dev_mode = dev_mode
+        self.set_supported_modalities(supported_modalities)
 
         use_quant = quantize and torch.cuda.is_available() and not dev_mode
         device = 0 if torch.cuda.is_available() and not dev_mode else -1

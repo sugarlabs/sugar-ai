@@ -18,9 +18,13 @@
 import httpx
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, Optional
 
 logger = logging.getLogger("sugar-ai")
+
+# Every provider handles text. Anything beyond it is declared per provider,
+# and per model, because support varies within a single API.
+TEXT_ONLY = frozenset({"text"})
 
 # Cloud APIs are usually fast, but allow headroom for cold routes / rate-limit
 # retries handled upstream. 120s is generous without hanging forever.
@@ -45,11 +49,17 @@ class GenerationParams:
 class BaseProvider:
     """OpenAI-compatible provider: speaks /v1/chat/completions over HTTP."""
 
+    # Whether an OpenAI-compatible endpoint accepts images or audio depends
+    # on the model behind it, so the default stays text and a deployment
+    # widens it through AI_SUPPORTED_MODALITIES.
+    default_modalities = TEXT_ONLY
+
     def __init__(
         self,
         model_name: str,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
+        supported_modalities: Optional[Iterable[str]] = None,
     ):
         if not api_key:
             raise ValueError(
@@ -58,6 +68,7 @@ class BaseProvider:
             )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
+        self.set_supported_modalities(supported_modalities)
         self._client = httpx.Client(
             timeout=_DEFAULT_TIMEOUT,
             headers={
@@ -101,6 +112,15 @@ class BaseProvider:
             return ""
         message = choices[0].get("message", {})
         return (message.get("content") or "").strip()
+
+    def set_supported_modalities(
+        self, modalities: Optional[Iterable[str]] = None
+    ) -> None:
+        """Declare what this provider accepts, defaulting to its own class."""
+        if modalities is None:
+            self.supported_modalities = frozenset(self.default_modalities)
+        else:
+            self.supported_modalities = frozenset(modalities) | TEXT_ONLY
 
     def get_model_name(self) -> str:
         return self.model_name

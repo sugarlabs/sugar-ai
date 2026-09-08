@@ -78,6 +78,9 @@ class HealthResponse(BaseModel):
     status: str
     provider: Optional[str] = None
     model: Optional[str] = None
+    modalities: Optional[List[str]] = Field(
+        None, description="Input kinds the active model accepts"
+    )
     detail: Optional[str] = None
 
 
