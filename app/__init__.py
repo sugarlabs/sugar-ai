@@ -1,11 +1,14 @@
 """
 Sugar-AI application package.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import os
 import logging
 
@@ -23,9 +26,65 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sugar-ai")
 
+# Stable error codes for the uniform error envelope, keyed by HTTP status.
+_ERROR_CODES = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    422: "validation_error",
+    429: "quota_exceeded",
+    500: "internal_error",
+}
+
+
+def _register_error_handlers(app: FastAPI) -> None:
+    """Make every error leave the API as {"error": {"code", "message"}}."""
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        detail = exc.detail
+        if isinstance(detail, dict) and "code" in detail and "message" in detail:
+            error = {"code": detail["code"], "message": detail["message"]}
+        else:
+            error = {
+                "code": _ERROR_CODES.get(exc.status_code, "error"),
+                "message": str(detail),
+            }
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": error},
+            headers=getattr(exc, "headers", None),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        errors = exc.errors()
+        first = errors[0] if errors else {}
+        location = ".".join(str(part) for part in first.get("loc", []))
+        message = first.get("msg", "Invalid request")
+        if location:
+            message = f"{location}: {message}"
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"code": "validation_error", "message": message}},
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.error("Unhandled error on %s: %s", request.url.path, exc)
+        return JSONResponse(
+            status_code=500,
+            content={"error": {"code": "internal_error", "message": "Internal server error"}},
+        )
+
+
 def create_app() -> FastAPI:
     app = FastAPI()
-    
+
+    _register_error_handlers(app)
+
     # apply middlewares
     app = setup_oauth(app)
     
