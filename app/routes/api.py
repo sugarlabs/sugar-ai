@@ -11,10 +11,32 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, List
 
+from typing import Union
+
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
+from app.schemas import (
+    AskResponse,
+    ChatChoice,
+    ChatCompletionResponse,
+    ChatMessageOut,
+    ErrorResponse,
+    GenerationParamsInfo,
+    HealthResponse,
+    ModelChangeResponse,
+    PromptedResponse,
+    QuotaInfo,
+)
+
+# Documented error responses shared by all authenticated endpoints.
+ERROR_RESPONSES = {
+    401: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+    429: {"model": ErrorResponse},
+    500: {"model": ErrorResponse},
+}
 
 # Pydantic models for chat completions
 class ChatMessage(BaseModel):
@@ -82,7 +104,7 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), req
     
     return settings.API_KEYS[api_key]
 
-@router.post("/ask")
+@router.post("/ask", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def ask_question(
     question: str, 
     user_info: dict = Depends(verify_api_key), 
@@ -111,16 +133,16 @@ async def ask_question(
             - user_quotas.get(api_key, {}).get("count", 0)
         )
         
-        return {
-            "answer": answer, 
-            "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
-        }
+        return AskResponse(
+            answer=answer,
+            user=user_info["name"],
+            quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+        )
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/ask-llm")
+@router.post("/ask-llm", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def ask_llm(
     question: str, 
     user_info: dict = Depends(verify_api_key), 
@@ -142,16 +164,31 @@ async def ask_llm(
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
         
-        return {
-            "answer": answer, 
-            "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
-        }
+        return AskResponse(
+            answer=answer,
+            user=user_info["name"],
+            quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+        )
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/ask-llm-prompted")
+def _generation_params_info(request_data: PromptedLLMRequest) -> GenerationParamsInfo:
+    """Echo the generation parameters a request was served with."""
+    return GenerationParamsInfo(
+        max_length=request_data.max_length,
+        truncation=request_data.truncation,
+        repetition_penalty=request_data.repetition_penalty,
+        temperature=request_data.temperature,
+        top_p=request_data.top_p,
+        top_k=request_data.top_k,
+    )
+
+@router.post(
+    "/ask-llm-prompted",
+    response_model=Union[ChatCompletionResponse, PromptedResponse],
+    responses=ERROR_RESPONSES,
+)
 async def ask_llm_prompted(
     request_data: PromptedLLMRequest,
     user_info: dict = Depends(verify_api_key), 
@@ -205,26 +242,18 @@ async def ask_llm_prompted(
             logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s - Last message: {last_user_msg[:200]}...")
             
             # Return chat format response
-            return {
-                "choices": [{
-                    "message": {
-                        "role": "assistant",
-                        "content": answer
-                    },
-                    "index": 0,
-                    "finish_reason": "stop"
-                }],
-                "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
-                "generation_params": {
-                    "max_length": request_data.max_length,
-                    "truncation": request_data.truncation,
-                    "repetition_penalty": request_data.repetition_penalty,
-                    "temperature": request_data.temperature,
-                    "top_p": request_data.top_p,
-                    "top_k": request_data.top_k
-                }
-            }
+            return ChatCompletionResponse(
+                choices=[
+                    ChatChoice(
+                        message=ChatMessageOut(role="assistant", content=answer),
+                        index=0,
+                        finish_reason="stop",
+                    )
+                ],
+                user=user_info["name"],
+                quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+                generation_params=_generation_params_info(request_data),
+            )
         else:
             # Prompted mode
             if not request_data.question or not request_data.custom_prompt:
@@ -251,19 +280,12 @@ async def ask_llm_prompted(
             process_time = time.time() - start_time
             logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
             
-            return {
-                "answer": answer, 
-                "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
-                "generation_params": {
-                    "max_length": request_data.max_length,
-                    "truncation": request_data.truncation,
-                    "repetition_penalty": request_data.repetition_penalty,
-                    "temperature": request_data.temperature,
-                    "top_p": request_data.top_p,
-                    "top_k": request_data.top_k
-                }
-            }
+            return PromptedResponse(
+                answer=answer,
+                user=user_info["name"],
+                quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+                generation_params=_generation_params_info(request_data),
+            )
         
     except HTTPException:
         raise
@@ -271,7 +293,7 @@ async def ask_llm_prompted(
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
         
-@router.post("/debug")
+@router.post("/debug", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def debug(
     code: str, 
     context: bool,
@@ -295,17 +317,17 @@ async def debug(
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
         
-        return {
-            "answer": answer, 
-            "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
-        }
-        
+        return AskResponse(
+            answer=answer,
+            user=user_info["name"],
+            quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+        )
+
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/change-model")
+@router.post("/change-model", response_model=ModelChangeResponse, responses=ERROR_RESPONSES)
 async def change_model(
     model: str, 
     api_key: str = Query(...), 
@@ -345,38 +367,38 @@ async def change_model(
         )
         agent.set_model(new_provider)
         logger.info(f"Model changed to {model} by {user_info['name']}")
-        return {"message": f"Model changed to {model}", "user": user_info["name"]}
+        return ModelChangeResponse(
+            message=f"Model changed to {model}",
+            user=user_info["name"],
+        )
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, response_model_exclude_none=True)
 async def health_check():
     """Check if the AI backend is alive and responsive."""
     if agent is None:
-        return {"status": "unavailable", "detail": "Agent not initialized"}
+        return HealthResponse(status="unavailable", detail="Agent not initialized")
 
     try:
         model_name = agent.provider.get_model_name()
         is_healthy = agent.provider.health_check()
 
         if is_healthy:
-            return {
-                "status": "healthy",
-                "provider": type(agent.provider).__name__,
-                "model": model_name,
-            }
+            return HealthResponse(
+                status="healthy",
+                provider=type(agent.provider).__name__,
+                model=model_name,
+            )
         else:
-            return {
-                "status": "unhealthy",
-                "provider": type(agent.provider).__name__,
-                "model": model_name,
-                "detail": "Health check failed",
-            }
+            return HealthResponse(
+                status="unhealthy",
+                provider=type(agent.provider).__name__,
+                model=model_name,
+                detail="Health check failed",
+            )
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")
-        return {
-            "status": "error",
-            "detail": str(e),
-        }
+        return HealthResponse(status="error", detail=str(e))
