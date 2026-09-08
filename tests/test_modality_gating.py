@@ -46,9 +46,14 @@ class FakeProvider:
 class FakeAgent:
     def __init__(self, modalities):
         self.provider = FakeProvider(modalities)
+        self.seen = None
 
     def run_chat_completion(self, messages, params=None):
+        self.seen = messages
         return "chat answer"
+
+    def run_with_custom_prompt(self, question, custom_prompt, params=None):
+        return "prompted answer"
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +67,9 @@ def api_key(monkeypatch):
 
 
 def use_provider_with(monkeypatch, modalities):
-    monkeypatch.setattr(api, "agent", FakeAgent(modalities))
+    agent = FakeAgent(modalities)
+    monkeypatch.setattr(api, "agent", agent)
+    return agent
 
 
 def chat(client, part):
@@ -134,6 +141,68 @@ def test_health_reports_the_accepted_modalities(client, monkeypatch):
     use_provider_with(monkeypatch, {"text", "image"})
     body = client.get("/health").json()
     assert body["modalities"] == ["image", "text"]
+
+
+# --- Attachments on the question endpoints ---------------------------------
+
+
+def test_ask_llm_attachment_reaches_the_model(client, monkeypatch):
+    agent = use_provider_with(monkeypatch, {"text", "image"})
+    response = client.post(
+        "/ask-llm",
+        json={"question": "what is this?", "attachments": [IMAGE_PART]},
+        headers=HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "chat answer"
+    assert agent.seen == [
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "what is this?"}, IMAGE_PART],
+        }
+    ]
+
+
+def test_ask_llm_attachment_is_gated(client, monkeypatch):
+    use_provider_with(monkeypatch, {"text"})
+    response = client.post(
+        "/ask-llm",
+        json={"question": "what is this?", "attachments": [IMAGE_PART]},
+        headers=HEADERS,
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "modality_not_supported"
+
+
+def test_prompted_attachment_sends_the_prompt_as_a_system_message(client, monkeypatch):
+    agent = use_provider_with(monkeypatch, {"text", "audio"})
+    response = client.post(
+        "/ask-llm-prompted",
+        json={
+            "chat": False,
+            "question": "what did I say?",
+            "custom_prompt": "be kind",
+            "attachments": [AUDIO_PART],
+        },
+        headers=HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "chat answer"
+    assert agent.seen[0] == {"role": "system", "content": "be kind"}
+    assert agent.seen[1]["content"][1] == AUDIO_PART
+
+
+def test_prompted_without_attachments_keeps_the_old_path(client, monkeypatch):
+    agent = use_provider_with(monkeypatch, {"text"})
+    response = client.post(
+        "/ask-llm-prompted",
+        json={"chat": False, "question": "hi", "custom_prompt": "be kind"},
+        headers=HEADERS,
+    )
+    assert response.json()["answer"] == "prompted answer"
+    assert agent.seen is None
 
 
 # --- Provider declarations -------------------------------------------------

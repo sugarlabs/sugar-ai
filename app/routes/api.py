@@ -17,7 +17,7 @@ from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
-from app.schemas.content import messages_to_provider
+from app.schemas.content import TextPart, messages_to_provider, modalities_of
 from app.schemas.requests import (
     AskRequest,
     ChatMessage,
@@ -176,14 +176,23 @@ async def ask_llm(
 ):
     """Process a question with direct LLM call (no retrieval)"""
     start_time = time.time()
-    question = _resolve_ask(body, question).question
+    ask = _resolve_ask(body, question)
+    question = ask.question
 
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
-    
+
     try:
-        answer = agent.provider.generate(question)
-        
+        if ask.attachments:
+            _require_supported_modalities(ask.modalities())
+            answer = agent.run_chat_completion(
+                messages_to_provider(
+                    [ChatMessage(role="user", content=ask.as_content())]
+                )
+            )
+        else:
+            answer = agent.provider.generate(question)
+
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
@@ -196,16 +205,14 @@ async def ask_llm(
             user=user_info["name"],
             quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-def _require_supported_modalities(messages) -> None:
+def _require_supported_modalities(requested: set) -> None:
     """Refuse a request whose media the active provider cannot accept."""
-    requested = set()
-    for message in messages:
-        requested |= message.modalities()
-
     supported = getattr(agent.provider, "supported_modalities", {"text"})
     unsupported = sorted(requested - set(supported))
     if unsupported:
@@ -256,7 +263,9 @@ async def ask_llm_prompted(
     try:
         if request_data.chat:
             # Chat completions mode; the request model guarantees messages exist.
-            _require_supported_modalities(request_data.messages)
+            _require_supported_modalities(
+                set().union(*(m.modalities() for m in request_data.messages))
+            )
 
             # Log the last user message for tracking
             user_messages = [msg for msg in request_data.messages if msg.role == "user"]
@@ -316,11 +325,31 @@ async def ask_llm_prompted(
                 truncation=request_data.truncation,
             )
 
-            answer = agent.run_with_custom_prompt(
-                question=request_data.question,
-                custom_prompt=request_data.custom_prompt,
-                params=params,
-            )
+            if request_data.attachments:
+                # Media can only travel as chat content, so the custom
+                # prompt becomes the system message.
+                _require_supported_modalities(
+                    modalities_of(list(request_data.attachments)) | {"text"}
+                )
+                answer = agent.run_chat_completion(
+                    messages_to_provider([
+                        ChatMessage(role="system", content=request_data.custom_prompt),
+                        ChatMessage(
+                            role="user",
+                            content=[
+                                TextPart(type="text", text=request_data.question),
+                                *request_data.attachments,
+                            ],
+                        ),
+                    ]),
+                    params=params,
+                )
+            else:
+                answer = agent.run_with_custom_prompt(
+                    question=request_data.question,
+                    custom_prompt=request_data.custom_prompt,
+                    params=params,
+                )
             
             process_time = time.time() - start_time
             logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")

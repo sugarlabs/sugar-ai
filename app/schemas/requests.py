@@ -14,11 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Request contracts for the Sugar-AI API."""
-from typing import List, Optional, Union
+from typing import Annotated, List, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.schemas.content import ContentPart, modalities_of
+from app.schemas.content import (
+    AudioPart,
+    ContentPart,
+    ImagePart,
+    TextPart,
+    modalities_of,
+)
+
+# An attachment is media only; the question itself carries the text.
+MediaPart = Annotated[Union[ImagePart, AudioPart], Field(discriminator="type")]
 
 # Generous bound; protects the backend from unbounded input, not a token limit.
 MAX_QUESTION_CHARS = 32_000
@@ -26,8 +35,24 @@ MAX_CODE_CHARS = 64_000
 
 
 class AskRequest(BaseModel):
-    """JSON body for /ask and /ask-llm."""
+    """JSON body for /ask and /ask-llm.
+
+    /ask-llm also takes attachments, so a question can refer to a picture
+    or a recording. /ask ignores them: retrieval is over text.
+    """
     question: str = Field(..., min_length=1, max_length=MAX_QUESTION_CHARS)
+    attachments: Optional[List[MediaPart]] = Field(
+        None, description="Images or audio the question refers to"
+    )
+
+    def as_content(self) -> Union[str, list]:
+        """Return the question alone, or the question beside its media."""
+        if not self.attachments:
+            return self.question
+        return [TextPart(type="text", text=self.question), *self.attachments]
+
+    def modalities(self) -> set:
+        return modalities_of(self.as_content())
 
 
 class DebugRequest(BaseModel):
@@ -70,6 +95,9 @@ class PromptedLLMRequest(BaseModel):
     question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
     custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
     messages: Optional[List[ChatMessage]] = Field(None, description="List of chat messages (required if chat=True)")
+    attachments: Optional[List[MediaPart]] = Field(
+        None, description="Images or audio the question refers to (prompted mode)"
+    )
 
     # Boundary validation added below:
     max_length: int = Field(1024, gt=0, le=8192, description="Maximum length of generated text")
