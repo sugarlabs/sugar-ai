@@ -14,9 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Request contracts for the Sugar-AI API."""
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
+
+from app.schemas.content import ContentPart, modalities_of
 
 # Generous bound; protects the backend from unbounded input, not a token limit.
 MAX_QUESTION_CHARS = 32_000
@@ -38,9 +40,23 @@ class DebugRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    """One message in a chat conversation."""
+    """One message in a chat conversation.
+
+    content is a plain string, as it always has been, or a list of typed
+    parts when the message carries an image or a recording.
+    """
     role: str  # "system", "user", "assistant"
-    content: str
+    content: Union[str, List[ContentPart]]
+
+    def modalities(self) -> set:
+        """Return the modalities this message uses."""
+        return modalities_of(self.content)
+
+    def text(self) -> str:
+        """Return the message's text, ignoring any non-text parts."""
+        if isinstance(self.content, str):
+            return self.content
+        return " ".join(part.text for part in self.content if part.type == "text")
 
 
 class PromptedLLMRequest(BaseModel):

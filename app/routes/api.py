@@ -17,6 +17,7 @@ from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
+from app.schemas.content import messages_to_provider
 from app.schemas.requests import (
     AskRequest,
     ChatMessage,
@@ -235,16 +236,16 @@ async def ask_llm_prompted(
             # Chat completions mode; the request model guarantees messages exist.
             # Log the last user message for tracking
             user_messages = [msg for msg in request_data.messages if msg.role == "user"]
-            last_user_msg = user_messages[-1].content if user_messages else "No user message"
+            last_user_msg = user_messages[-1].text() if user_messages else "No user message"
             logger.info(f"REQUEST - /ask-llm-prompted (chat=True) - User: {user_info['name']} - IP: {client_ip} - Last message: {last_user_msg[:200]}...")
             
             # Log system message if present
             system_messages = [msg for msg in request_data.messages if msg.role == "system"]
             if system_messages:
-                logger.info(f"SYSTEM PROMPT - User: {user_info['name']} - Prompt: {system_messages[0].content[:100]}...")
-            
+                logger.info(f"SYSTEM PROMPT - User: {user_info['name']} - Prompt: {system_messages[0].text()[:100]}...")
+
             # Convert Pydantic messages to dict format for the agent function
-            messages_dict = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
+            messages_dict = messages_to_provider(request_data.messages)
             
             # Build generation params from request
             params = GenerationParams(

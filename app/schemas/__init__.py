@@ -18,6 +18,15 @@ Schema package for Sugar-AI.
 
 Pydantic models that define the API's input and output contracts.
 """
+from app.schemas.content import (
+    AudioPart,
+    ContentPart,
+    ImagePart,
+    TextPart,
+    content_to_provider,
+    messages_to_provider,
+    modalities_of,
+)
 from app.schemas.requests import (
     AskRequest,
     ChatMessage,
@@ -39,6 +48,13 @@ from app.schemas.responses import (
 )
 
 __all__ = [
+    "AudioPart",
+    "ContentPart",
+    "ImagePart",
+    "TextPart",
+    "content_to_provider",
+    "messages_to_provider",
+    "modalities_of",
     "AskRequest",
     "ChatMessage",
     "DebugRequest",
