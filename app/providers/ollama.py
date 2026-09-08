@@ -85,7 +85,7 @@ class OllamaProvider(BaseProvider):
 
         payload = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": [self._to_ollama_message(message) for message in messages],
             "stream": False,
             "options": self._params_to_options(params),
         }
@@ -99,6 +99,36 @@ class OllamaProvider(BaseProvider):
         data = response.json()
         message = data.get("message", {})
         return message.get("content", "").strip()
+
+    def _to_ollama_message(self, message: dict) -> dict:
+        """Render one message in Ollama's chat format.
+
+        Ollama keeps text in content and images in a sibling list, rather
+        than interleaving them the way other APIs do.
+        """
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return message
+
+        texts = []
+        images = []
+        for part in content:
+            kind = part.get("type")
+            if kind == "text":
+                texts.append(part["text"])
+            elif kind == "image":
+                images.append(part["data"])
+            elif kind == "audio":
+                # Refused by the modality gate; guarded here in case a
+                # provider is built with audio configured on by mistake.
+                raise ValueError("Ollama does not accept audio input")
+            else:
+                raise ValueError(f"Unsupported content part: {kind}")
+
+        rendered = {**message, "content": " ".join(texts)}
+        if images:
+            rendered["images"] = images
+        return rendered
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
