@@ -70,12 +70,14 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### Test API endpoints
 
-Sugar-AI provides three different endpoints for different use cases:
+Sugar-AI provides three different endpoints for different use cases.
+[API_CONTRACTS.md](API_CONTRACTS.md) describes every request and response
+in full, including sending images and audio.
 
 | Endpoint | Purpose | Input Format | Features |
 |----------|---------|--------------|----------|
-| `/ask` | RAG-enabled answers | Query parameter | • Retrieval-Augmented Generation<br>• Sugar/Pygame/GTK documentation<br>• Child-friendly responses |
-| `/ask-llm` | Direct LLM without RAG | Query parameter | • No document retrieval<br>• Direct model access<br>• Faster responses<br>• Default system prompt and parameters |
+| `/ask` | RAG-enabled answers | JSON body | • Retrieval-Augmented Generation<br>• Sugar/Pygame/GTK documentation<br>• Child-friendly responses |
+| `/ask-llm` | Direct LLM without RAG | JSON body | • No document retrieval<br>• Direct model access<br>• Accepts images and audio<br>• Default system prompt and parameters |
 | `/ask-llm-prompted(promoted mode[default])` | Custom prompt with advanced controls | JSON body | • Custom system prompts<br>• Configurable model parameters |
 | `/ask-llm-prompted(chat=True)` | Accepts chat history with system prompt | JSON body | • Send chat history along with system prompt<br>• Configurable model parameters |
 
