@@ -27,6 +27,11 @@ _DEFAULT_TIMEOUT = 120.0
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
+def _text_of(parts: list) -> str:
+    """Join the text parts of a message, ignoring any media."""
+    return " ".join(part["text"] for part in parts if part.get("type") == "text")
+
+
 class GeminiProvider(BaseProvider):
     """Provider that connects to Google's Gemini generateContent API.
 
@@ -111,14 +116,42 @@ class GeminiProvider(BaseProvider):
         system_parts = []
         for message in messages:
             role = message.get("role", "user")
-            text = message.get("content", "")
+            content = message.get("content", "")
             if role == "system":
+                # A system instruction is text; media belongs in a turn.
+                text = content if isinstance(content, str) else _text_of(content)
                 if text:
                     system_parts.append(text)
                 continue
             gemini_role = "model" if role == "assistant" else "user"
-            contents.append({"role": gemini_role, "parts": [{"text": text}]})
+            contents.append({"role": gemini_role, "parts": self._to_parts(content)})
         return contents, "\n\n".join(system_parts)
+
+    def _to_parts(self, content) -> list[dict]:
+        """Render message content as Gemini parts."""
+        if isinstance(content, str):
+            return [{"text": content}]
+        return [self._to_part(part) for part in content]
+
+    def _to_part(self, part: dict) -> dict:
+        """Render one content part as a Gemini part.
+
+        Images and audio share inline_data; only the mime type differs.
+        """
+        kind = part.get("type")
+
+        if kind == "text":
+            return {"text": part["text"]}
+
+        if kind in ("image", "audio"):
+            return {
+                "inline_data": {
+                    "mime_type": part["mime_type"],
+                    "data": part["data"],
+                }
+            }
+
+        raise ValueError(f"Unsupported content part: {kind}")
 
     def _extract_text(self, data: dict) -> str:
         """Pull the response text out of a generateContent payload."""
