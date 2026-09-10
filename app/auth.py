@@ -17,6 +17,7 @@ from starlette.responses import RedirectResponse
 from dotenv import load_dotenv
 
 from app.database import APIKey, get_db
+from app.config import settings
 
 # load environment variables
 load_dotenv()
@@ -142,3 +143,23 @@ def sync_env_keys_to_db(db: Session):
     except Exception as e:
         db.rollback()
         logger.error(f"Error syncing keys: {e}")
+
+
+def load_approved_keys_from_db(db: Session):
+    """Load approved, active database keys into the runtime key mapping."""
+    try:
+        approved_keys = db.query(APIKey).filter(
+            APIKey.approved.is_(True),
+            APIKey.is_active.is_(True),
+        ).all()
+
+        # The database is authoritative after environment keys have been synced.
+        # Rebuilding the mapping also removes keys revoked since the last run.
+        settings.API_KEYS.clear()
+        for key in approved_keys:
+            settings.API_KEYS[key.key] = {
+                "name": key.name,
+                "can_change_model": key.can_change_model,
+            }
+    except Exception as e:
+        logger.error(f"Error loading approved keys from database: {e}")

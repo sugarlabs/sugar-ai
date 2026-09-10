@@ -27,7 +27,7 @@ from app import create_app
 from app.ai import RAGAgent
 from app.providers import create_provider
 from app.database import get_db
-from app.auth import sync_env_keys_to_db
+from app.auth import load_approved_keys_from_db, sync_env_keys_to_db
 from app.config import settings
 from app.routes import api
 
@@ -41,6 +41,7 @@ async def startup_event():
     """Initialize data on app startup"""
     db = next(get_db())
     sync_env_keys_to_db(db)
+    load_approved_keys_from_db(db)
     # Determine model name: AI_MODEL takes priority, then DEV/PROD fallback
     if settings.AI_MODEL:
         active_model = settings.AI_MODEL
