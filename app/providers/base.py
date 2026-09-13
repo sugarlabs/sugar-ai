@@ -138,5 +138,11 @@ class BaseProvider:
         return None
 
     def close(self) -> None:
-        """Release provider resources."""
-        self._client.close()
+        """Release provider resources.
+
+        Subclasses that do not speak HTTP (HuggingFaceProvider loads a local
+        model) never create a client, so only close one if it exists.
+        """
+        client = getattr(self, "_client", None)
+        if client is not None:
+            client.close()

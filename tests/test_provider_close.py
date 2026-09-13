@@ -60,3 +60,14 @@ def test_close_releases_http_client(make_provider):
     provider.close()
 
     assert provider._client.is_closed is True
+
+
+def test_close_is_safe_without_http_client():
+    """Providers with no _client (HuggingFaceProvider) must not raise.
+
+    HuggingFaceProvider subclasses BaseProvider but loads a local model
+    instead of calling super().__init__(), so it never has a _client.
+    """
+    provider = base.BaseProvider.__new__(base.BaseProvider)
+
+    provider.close()
