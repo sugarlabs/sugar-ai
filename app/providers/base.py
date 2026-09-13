@@ -139,4 +139,4 @@ class BaseProvider:
 
     def close(self) -> None:
         """Release provider resources."""
-        pass
+        self._client.close()
