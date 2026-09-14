@@ -120,15 +120,20 @@ replies are not part of this contract.
 
 ### What each provider accepts
 
-| Provider | Accepts | Note |
+Support varies by model, not by provider, so Sugar-AI asks the backend
+where it can and falls back to a per-provider default where it cannot.
+
+| Provider | Accepts | How it is known |
 |---|---|---|
-| Gemini | text, image, audio | Media travels as `inline_data` |
-| Ollama | text, image | Its chat API has no audio input |
-| OpenAI-compatible | text | Support depends on the model, so widen it explicitly |
+| Ollama | per model | Asked via `/api/show` at startup; `vision` means image. No audio input |
+| Gemini | text, image, audio | Default; every current `generateContent` model takes all three |
+| OpenAI-compatible | text | Default; depends on the model, so widen it explicitly |
 | HuggingFace | text | Local text-generation pipeline |
 
 Sending media a model cannot accept returns 422 `modality_not_supported`
 naming what you sent and what it accepts, rather than failing upstream.
+If a backend cannot be asked (server down at startup, unknown model),
+the provider's default stands.
 
 To widen an OpenAI-compatible deployment whose model does handle media:
 

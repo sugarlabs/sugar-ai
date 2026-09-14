@@ -161,6 +161,16 @@ class BaseProvider:
         else:
             self.supported_modalities = frozenset(modalities) | TEXT_ONLY
 
+    def detect_modalities(self) -> None:
+        """Ask the backend what the model accepts, where it can be asked.
+
+        Support varies per model, not per provider, so a backend that
+        reports it should be believed over the class default. Providers
+        without such a query keep their default. Failure to ask is never
+        fatal: the default stands.
+        """
+        return None
+
     def get_model_name(self) -> str:
         return self.model_name
 

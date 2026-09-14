@@ -27,6 +27,9 @@ logger = logging.getLogger("sugar-ai")
 # 5 minutes allows for pulling + loading a model on first use.
 _DEFAULT_TIMEOUT = 300.0
 
+# /api/show names what a model can do; only some entries are input kinds.
+_CAPABILITY_MODALITIES = {"vision": "image", "audio": "audio"}
+
 
 class OllamaProvider(BaseProvider):
     """Provider that connects to an Ollama server via HTTP.
@@ -36,8 +39,9 @@ class OllamaProvider(BaseProvider):
     The only difference is the base_url.
     """
 
-    # Ollama's chat API carries images per message. It has no audio input,
-    # so a request with a recording is refused before it is sent.
+    # Whether a given model takes images depends on the model, and Ollama
+    # reports it per model, so detect_modalities() replaces this guess
+    # whenever the server can be asked. Ollama has no audio input.
     default_modalities = frozenset({"text", "image"})
 
     def __init__(
@@ -99,6 +103,37 @@ class OllamaProvider(BaseProvider):
         data = response.json()
         message = data.get("message", {})
         return message.get("content", "").strip()
+
+    def detect_modalities(self) -> None:
+        """Replace the class default with what /api/show says this model takes."""
+        try:
+            response = self._client.post(
+                f"{self.base_url}/api/show",
+                json={"name": self.model_name},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            capabilities = response.json().get("capabilities", [])
+        except Exception as e:
+            logger.warning(
+                "Could not read capabilities for %s; assuming %s: %s",
+                self.model_name,
+                sorted(self.supported_modalities),
+                e,
+            )
+            return
+
+        detected = {
+            _CAPABILITY_MODALITIES[name]
+            for name in capabilities
+            if name in _CAPABILITY_MODALITIES
+        }
+        self.set_supported_modalities(detected)
+        logger.info(
+            "%s accepts %s (from /api/show)",
+            self.model_name,
+            sorted(self.supported_modalities),
+        )
 
     def _to_ollama_message(self, message: dict) -> dict:
         """Render one message in Ollama's chat format.
