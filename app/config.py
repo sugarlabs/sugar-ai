@@ -20,6 +20,21 @@ class Settings(BaseSettings):
     AI_MODEL: str | None = None
     OLLAMA_BASE_URL: str = 'http://localhost:11434'
 
+    # Override what the active model accepts, e.g. "text,image,audio".
+    # Unset means the provider's own default, which is text for backends
+    # whose support depends on the model.
+    AI_SUPPORTED_MODALITIES: str | None = None
+
+    def supported_modalities(self) -> list[str] | None:
+        """Parse AI_SUPPORTED_MODALITIES into a list, or None when unset."""
+        if not self.AI_SUPPORTED_MODALITIES:
+            return None
+        return [
+            name.strip().lower()
+            for name in self.AI_SUPPORTED_MODALITIES.split(",")
+            if name.strip()
+        ] or None
+
     # OpenAI-compatible provider (Groq, Cerebras, OpenRouter, OpenAI, Mistral, ...)
     OPENAI_API_KEY: str | None = None
     OPENAI_BASE_URL: str = 'https://api.openai.com/v1'

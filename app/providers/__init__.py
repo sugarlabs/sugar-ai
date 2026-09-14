@@ -41,38 +41,47 @@ def create_provider(
 ) -> BaseProvider:
     """Build a configured model provider by name."""
     name = provider_name.lower().strip()
+    modalities = kwargs.get("supported_modalities")
 
     if name == "huggingface":
-        return HuggingFaceProvider(
+        provider = HuggingFaceProvider(
             model_name=model_name,
             quantize=kwargs.get("quantize", True),
             dev_mode=kwargs.get("dev_mode", False),
+            supported_modalities=modalities,
         )
-
-    if name == "ollama":
-        return OllamaProvider(
+    elif name == "ollama":
+        provider = OllamaProvider(
             model_name=model_name,
             base_url=kwargs.get("base_url", "http://localhost:11434"),
+            supported_modalities=modalities,
         )
-
-    if name in ("openai", "openai-compatible", "openai_compatible"):
-        return BaseProvider(
+    elif name in ("openai", "openai-compatible", "openai_compatible"):
+        provider = BaseProvider(
             model_name=model_name,
             api_key=kwargs.get("api_key"),
             base_url=kwargs.get("openai_base_url", "https://api.openai.com/v1"),
+            supported_modalities=modalities,
         )
-
-    if name == "gemini":
-        return GeminiProvider(
+    elif name == "gemini":
+        provider = GeminiProvider(
             model_name=model_name,
             api_key=kwargs.get("gemini_api_key"),
             base_url=kwargs.get(
                 "gemini_base_url",
                 "https://generativelanguage.googleapis.com/v1beta",
             ),
+            supported_modalities=modalities,
+        )
+    else:
+        raise ValueError(
+            f"Unknown provider: '{provider_name}'. "
+            f"Valid providers: huggingface, ollama, openai, gemini"
         )
 
-    raise ValueError(
-        f"Unknown provider: '{provider_name}'. "
-        f"Valid providers: huggingface, ollama, openai, gemini"
-    )
+    # An explicit configuration is the operator's word and wins over
+    # whatever the backend would report about itself.
+    if modalities is None:
+        provider.detect_modalities()
+
+    return provider

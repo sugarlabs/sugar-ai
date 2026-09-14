@@ -17,7 +17,7 @@
 """Ollama REST API provider for Sugar-AI."""
 import httpx
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
 from app.providers.base import BaseProvider, GenerationParams
 
@@ -26,6 +26,9 @@ logger = logging.getLogger("sugar-ai")
 # Ollama can be slow on first request (cold model load).
 # 5 minutes allows for pulling + loading a model on first use.
 _DEFAULT_TIMEOUT = 300.0
+
+# /api/show names what a model can do; only some entries are input kinds.
+_CAPABILITY_MODALITIES = {"vision": "image", "audio": "audio"}
 
 
 class OllamaProvider(BaseProvider):
@@ -36,10 +39,21 @@ class OllamaProvider(BaseProvider):
     The only difference is the base_url.
     """
 
-    def __init__(self, model_name: str, base_url: str = "http://localhost:11434"):
+    # Whether a given model takes images depends on the model, and Ollama
+    # reports it per model, so detect_modalities() replaces this guess
+    # whenever the server can be asked. Ollama has no audio input.
+    default_modalities = frozenset({"text", "image"})
+
+    def __init__(
+        self,
+        model_name: str,
+        base_url: str = "http://localhost:11434",
+        supported_modalities: Optional[Iterable[str]] = None,
+    ):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(timeout=_DEFAULT_TIMEOUT)
+        self.set_supported_modalities(supported_modalities)
 
         logger.info(
             "OllamaProvider initialized: model=%s, server=%s",
@@ -75,7 +89,7 @@ class OllamaProvider(BaseProvider):
 
         payload = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": [self._to_ollama_message(message) for message in messages],
             "stream": False,
             "options": self._params_to_options(params),
         }
@@ -89,6 +103,67 @@ class OllamaProvider(BaseProvider):
         data = response.json()
         message = data.get("message", {})
         return message.get("content", "").strip()
+
+    def detect_modalities(self) -> None:
+        """Replace the class default with what /api/show says this model takes."""
+        try:
+            response = self._client.post(
+                f"{self.base_url}/api/show",
+                json={"name": self.model_name},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            capabilities = response.json().get("capabilities", [])
+        except Exception as e:
+            logger.warning(
+                "Could not read capabilities for %s; assuming %s: %s",
+                self.model_name,
+                sorted(self.supported_modalities),
+                e,
+            )
+            return
+
+        detected = {
+            _CAPABILITY_MODALITIES[name]
+            for name in capabilities
+            if name in _CAPABILITY_MODALITIES
+        }
+        self.set_supported_modalities(detected)
+        logger.info(
+            "%s accepts %s (from /api/show)",
+            self.model_name,
+            sorted(self.supported_modalities),
+        )
+
+    def _to_ollama_message(self, message: dict) -> dict:
+        """Render one message in Ollama's chat format.
+
+        Ollama keeps text in content and images in a sibling list, rather
+        than interleaving them the way other APIs do.
+        """
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return message
+
+        texts = []
+        images = []
+        for part in content:
+            kind = part.get("type")
+            if kind == "text":
+                texts.append(part["text"])
+            elif kind == "image":
+                images.append(part["data"])
+            elif kind == "audio":
+                # Refused by the modality gate; guarded here in case a
+                # provider is built with audio configured on by mistake.
+                raise ValueError("Ollama does not accept audio input")
+            else:
+                raise ValueError(f"Unsupported content part: {kind}")
+
+        rendered = {**message, "content": " ".join(texts)}
+        if images:
+            rendered["images"] = images
+        return rendered
 
     def close(self) -> None:
         """Close the underlying HTTP client."""

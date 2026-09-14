@@ -18,9 +18,20 @@
 import httpx
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, Optional
 
 logger = logging.getLogger("sugar-ai")
+
+# Every provider handles text. Anything beyond it is declared per provider,
+# and per model, because support varies within a single API.
+TEXT_ONLY = frozenset({"text"})
+
+# OpenAI names an audio clip's format, not its mime type.
+_AUDIO_FORMATS = {
+    "audio/wav": "wav",
+    "audio/mpeg": "mp3",
+    "audio/ogg": "ogg",
+}
 
 # Cloud APIs are usually fast, but allow headroom for cold routes / rate-limit
 # retries handled upstream. 120s is generous without hanging forever.
@@ -45,11 +56,17 @@ class GenerationParams:
 class BaseProvider:
     """OpenAI-compatible provider: speaks /v1/chat/completions over HTTP."""
 
+    # Whether an OpenAI-compatible endpoint accepts images or audio depends
+    # on the model behind it, so the default stays text and a deployment
+    # widens it through AI_SUPPORTED_MODALITIES.
+    default_modalities = TEXT_ONLY
+
     def __init__(
         self,
         model_name: str,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
+        supported_modalities: Optional[Iterable[str]] = None,
     ):
         if not api_key:
             raise ValueError(
@@ -58,6 +75,7 @@ class BaseProvider:
             )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
+        self.set_supported_modalities(supported_modalities)
         self._client = httpx.Client(
             timeout=_DEFAULT_TIMEOUT,
             headers={
@@ -84,7 +102,7 @@ class BaseProvider:
 
         payload = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": [self._to_openai_message(message) for message in messages],
             "stream": False,
             **self._params_to_options(params),
         }
@@ -101,6 +119,57 @@ class BaseProvider:
             return ""
         message = choices[0].get("message", {})
         return (message.get("content") or "").strip()
+
+    def _to_openai_message(self, message: dict) -> dict:
+        """Render one message in the OpenAI content format."""
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return message
+        return {
+            **message,
+            "content": [self._to_openai_part(part) for part in content],
+        }
+
+    def _to_openai_part(self, part: dict) -> dict:
+        """Render one content part as an OpenAI content block."""
+        kind = part.get("type")
+
+        if kind == "text":
+            return {"type": "text", "text": part["text"]}
+
+        if kind == "image":
+            data_url = f"data:{part['mime_type']};base64,{part['data']}"
+            return {"type": "image_url", "image_url": {"url": data_url}}
+
+        if kind == "audio":
+            return {
+                "type": "input_audio",
+                "input_audio": {
+                    "data": part["data"],
+                    "format": _AUDIO_FORMATS[part["mime_type"]],
+                },
+            }
+
+        raise ValueError(f"Unsupported content part: {kind}")
+
+    def set_supported_modalities(
+        self, modalities: Optional[Iterable[str]] = None
+    ) -> None:
+        """Declare what this provider accepts, defaulting to its own class."""
+        if modalities is None:
+            self.supported_modalities = frozenset(self.default_modalities)
+        else:
+            self.supported_modalities = frozenset(modalities) | TEXT_ONLY
+
+    def detect_modalities(self) -> None:
+        """Ask the backend what the model accepts, where it can be asked.
+
+        Support varies per model, not per provider, so a backend that
+        reports it should be believed over the class default. Providers
+        without such a query keep their default. Failure to ask is never
+        fatal: the default stands.
+        """
+        return None
 
     def get_model_name(self) -> str:
         return self.model_name

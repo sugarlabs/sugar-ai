@@ -1,9 +1,9 @@
 """
 API routes for Sugar-AI.
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Header, Query, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 import time
 import logging
 import os
@@ -11,30 +11,39 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, List
 
+from typing import Union
+
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
 from app.providers.base import GenerationParams
 from app.config import settings
+from app.schemas.content import TextPart, messages_to_provider, modalities_of
+from app.schemas.requests import (
+    AskRequest,
+    ChatMessage,
+    DebugRequest,
+    PromptedLLMRequest,
+)
+from app.schemas import (
+    AskResponse,
+    ChatChoice,
+    ChatCompletionResponse,
+    ChatMessageOut,
+    ErrorResponse,
+    GenerationParamsInfo,
+    HealthResponse,
+    ModelChangeResponse,
+    PromptedResponse,
+    QuotaInfo,
+)
 
-# Pydantic models for chat completions
-class ChatMessage(BaseModel):
-    role: str  # "system", "user", "assistant" 
-    content: str
-
-class PromptedLLMRequest(BaseModel):
-    """Request model for ask-llm-prompted endpoint"""
-    chat: bool = Field(False, description="Enable chat mode (uses messages instead of question)")
-    question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
-    custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
-    messages: Optional[List[ChatMessage]] = Field(None, description="List of chat messages (required if chat=True)")
-    
-    # Boundary validation added below:
-    max_length: int = Field(1024, gt=0, le=8192, description="Maximum length of generated text")
-    truncation: bool = Field(True, description="Whether to truncate input if too long")
-    repetition_penalty: float = Field(1.1, gt=0.0, le=2.0, description="Repetition penalty")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for sampling")
-    top_p: float = Field(0.9, gt=0.0, le=1.0, description="Top-p (nucleus) sampling parameter")
-    top_k: int = Field(50, ge=0, description="Top-k sampling parameter")
+# Documented error responses shared by all authenticated endpoints.
+ERROR_RESPONSES = {
+    401: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+    429: {"model": ErrorResponse},
+    500: {"model": ErrorResponse},
+}
 
 router = APIRouter(tags=["api"])
 
@@ -82,15 +91,51 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), req
     
     return settings.API_KEYS[api_key]
 
-@router.post("/ask")
+def _resolve_ask(body: Optional[AskRequest], question: Optional[str]) -> AskRequest:
+    """Take the JSON body, else fall back to the legacy ?question= parameter."""
+    if body is not None:
+        return body
+    if question is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "validation_error",
+                "message": "question is required, in the JSON body or as a query parameter",
+            },
+        )
+    try:
+        return AskRequest(question=question)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "message": _first_error(e)},
+        )
+
+
+def _first_error(exc: ValidationError) -> str:
+    """Render a Pydantic error the same way the request-validation handler does."""
+    errors = exc.errors()
+    if not errors:
+        return "Invalid request"
+    first = errors[0]
+    location = ".".join(str(part) for part in first.get("loc", []))
+    message = first.get("msg", "Invalid request")
+    return f"{location}: {message}" if location else message
+
+
+@router.post("/ask", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def ask_question(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    body: Optional[AskRequest] = Body(None),
+    question: Optional[str] = Query(
+        None, description="Deprecated: send a JSON body instead"
+    ),
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process a question using RAG pipeline"""
     start_time = time.time()
-    
+    question = _resolve_ask(body, question).question
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
@@ -111,30 +156,43 @@ async def ask_question(
             - user_quotas.get(api_key, {}).get("count", 0)
         )
         
-        return {
-            "answer": answer, 
-            "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
-        }
+        return AskResponse(
+            answer=answer,
+            user=user_info["name"],
+            quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+        )
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/ask-llm")
+@router.post("/ask-llm", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def ask_llm(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    body: Optional[AskRequest] = Body(None),
+    question: Optional[str] = Query(
+        None, description="Deprecated: send a JSON body instead"
+    ),
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process a question with direct LLM call (no retrieval)"""
     start_time = time.time()
-    
+    ask = _resolve_ask(body, question)
+    question = ask.question
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
-    
+
     try:
-        answer = agent.provider.generate(question)
-        
+        if ask.attachments:
+            _require_supported_modalities(ask.modalities())
+            answer = agent.run_chat_completion(
+                messages_to_provider(
+                    [ChatMessage(role="user", content=ask.as_content())]
+                )
+            )
+        else:
+            answer = agent.provider.generate(question)
+
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
         
@@ -142,16 +200,51 @@ async def ask_llm(
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
         
-        return {
-            "answer": answer, 
-            "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
-        }
+        return AskResponse(
+            answer=answer,
+            user=user_info["name"],
+            quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/ask-llm-prompted")
+def _require_supported_modalities(requested: set) -> None:
+    """Refuse a request whose media the active provider cannot accept."""
+    supported = getattr(agent.provider, "supported_modalities", {"text"})
+    unsupported = sorted(requested - set(supported))
+    if unsupported:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "modality_not_supported",
+                "message": (
+                    f"{agent.provider.get_model_name()} does not accept "
+                    f"{', '.join(unsupported)} input; it accepts "
+                    f"{', '.join(sorted(supported))}"
+                ),
+            },
+        )
+
+
+def _generation_params_info(request_data: PromptedLLMRequest) -> GenerationParamsInfo:
+    """Echo the generation parameters a request was served with."""
+    return GenerationParamsInfo(
+        max_length=request_data.max_length,
+        truncation=request_data.truncation,
+        repetition_penalty=request_data.repetition_penalty,
+        temperature=request_data.temperature,
+        top_p=request_data.top_p,
+        top_k=request_data.top_k,
+    )
+
+@router.post(
+    "/ask-llm-prompted",
+    response_model=Union[ChatCompletionResponse, PromptedResponse],
+    responses=ERROR_RESPONSES,
+)
 async def ask_llm_prompted(
     request_data: PromptedLLMRequest,
     user_info: dict = Depends(verify_api_key), 
@@ -169,22 +262,23 @@ async def ask_llm_prompted(
     
     try:
         if request_data.chat:
-            # Chat completions mode
-            if not request_data.messages:
-                raise HTTPException(status_code=400, detail="messages field is required when chat=True")
-            
+            # Chat completions mode; the request model guarantees messages exist.
+            _require_supported_modalities(
+                set().union(*(m.modalities() for m in request_data.messages))
+            )
+
             # Log the last user message for tracking
             user_messages = [msg for msg in request_data.messages if msg.role == "user"]
-            last_user_msg = user_messages[-1].content if user_messages else "No user message"
+            last_user_msg = user_messages[-1].text() if user_messages else "No user message"
             logger.info(f"REQUEST - /ask-llm-prompted (chat=True) - User: {user_info['name']} - IP: {client_ip} - Last message: {last_user_msg[:200]}...")
             
             # Log system message if present
             system_messages = [msg for msg in request_data.messages if msg.role == "system"]
             if system_messages:
-                logger.info(f"SYSTEM PROMPT - User: {user_info['name']} - Prompt: {system_messages[0].content[:100]}...")
-            
+                logger.info(f"SYSTEM PROMPT - User: {user_info['name']} - Prompt: {system_messages[0].text()[:100]}...")
+
             # Convert Pydantic messages to dict format for the agent function
-            messages_dict = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
+            messages_dict = messages_to_provider(request_data.messages)
             
             # Build generation params from request
             params = GenerationParams(
@@ -205,31 +299,20 @@ async def ask_llm_prompted(
             logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s - Last message: {last_user_msg[:200]}...")
             
             # Return chat format response
-            return {
-                "choices": [{
-                    "message": {
-                        "role": "assistant",
-                        "content": answer
-                    },
-                    "index": 0,
-                    "finish_reason": "stop"
-                }],
-                "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
-                "generation_params": {
-                    "max_length": request_data.max_length,
-                    "truncation": request_data.truncation,
-                    "repetition_penalty": request_data.repetition_penalty,
-                    "temperature": request_data.temperature,
-                    "top_p": request_data.top_p,
-                    "top_k": request_data.top_k
-                }
-            }
+            return ChatCompletionResponse(
+                choices=[
+                    ChatChoice(
+                        message=ChatMessageOut(role="assistant", content=answer),
+                        index=0,
+                        finish_reason="stop",
+                    )
+                ],
+                user=user_info["name"],
+                quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+                generation_params=_generation_params_info(request_data),
+            )
         else:
-            # Prompted mode
-            if not request_data.question or not request_data.custom_prompt:
-                raise HTTPException(status_code=400, detail="question and custom_prompt fields are required when chat=False")
-            
+            # Prompted mode; the request model guarantees question and custom_prompt.
             logger.info(f"REQUEST - /ask-llm-prompted - User: {user_info['name']} - IP: {client_ip} - Question: {request_data.question[:200]}...")
             logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
             
@@ -242,28 +325,41 @@ async def ask_llm_prompted(
                 truncation=request_data.truncation,
             )
 
-            answer = agent.run_with_custom_prompt(
-                question=request_data.question,
-                custom_prompt=request_data.custom_prompt,
-                params=params,
-            )
+            if request_data.attachments:
+                # Media can only travel as chat content, so the custom
+                # prompt becomes the system message.
+                _require_supported_modalities(
+                    modalities_of(list(request_data.attachments)) | {"text"}
+                )
+                answer = agent.run_chat_completion(
+                    messages_to_provider([
+                        ChatMessage(role="system", content=request_data.custom_prompt),
+                        ChatMessage(
+                            role="user",
+                            content=[
+                                TextPart(type="text", text=request_data.question),
+                                *request_data.attachments,
+                            ],
+                        ),
+                    ]),
+                    params=params,
+                )
+            else:
+                answer = agent.run_with_custom_prompt(
+                    question=request_data.question,
+                    custom_prompt=request_data.custom_prompt,
+                    params=params,
+                )
             
             process_time = time.time() - start_time
             logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
             
-            return {
-                "answer": answer, 
-                "user": user_info["name"],
-                "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS},
-                "generation_params": {
-                    "max_length": request_data.max_length,
-                    "truncation": request_data.truncation,
-                    "repetition_penalty": request_data.repetition_penalty,
-                    "temperature": request_data.temperature,
-                    "top_p": request_data.top_p,
-                    "top_k": request_data.top_k
-                }
-            }
+            return PromptedResponse(
+                answer=answer,
+                user=user_info["name"],
+                quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+                generation_params=_generation_params_info(request_data),
+            )
         
     except HTTPException:
         raise
@@ -271,16 +367,37 @@ async def ask_llm_prompted(
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
         
-@router.post("/debug")
+@router.post("/debug", response_model=AskResponse, responses=ERROR_RESPONSES)
 async def debug(
-    code: str, 
-    context: bool,
-    user_info: dict = Depends(verify_api_key), 
+    body: Optional[DebugRequest] = Body(None),
+    code: Optional[str] = Query(None, description="Deprecated: send a JSON body instead"),
+    context: Optional[bool] = Query(
+        None, description="Deprecated: send a JSON body instead"
+    ),
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process python code for debugging"""
     start_time = time.time()
-    
+
+    if body is None:
+        if code is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "validation_error",
+                    "message": "code is required, in the JSON body or as a query parameter",
+                },
+            )
+        try:
+            body = DebugRequest(code=code, context=bool(context))
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "validation_error", "message": _first_error(e)},
+            )
+    code, context = body.code, body.context
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     
@@ -295,17 +412,17 @@ async def debug(
         api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
         remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
         
-        return {
-            "answer": answer, 
-            "user": user_info["name"],
-            "quota": {"remaining": remaining, "total": settings.MAX_DAILY_REQUESTS}
-        }
-        
+        return AskResponse(
+            answer=answer,
+            user=user_info["name"],
+            quota=QuotaInfo(remaining=remaining, total=settings.MAX_DAILY_REQUESTS),
+        )
+
     except Exception as e:
         logger.error(f"ERROR - User: {user_info['name']} - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/change-model")
+@router.post("/change-model", response_model=ModelChangeResponse, responses=ERROR_RESPONSES)
 async def change_model(
     model: str, 
     api_key: str = Query(...), 
@@ -342,41 +459,45 @@ async def change_model(
             openai_base_url=settings.OPENAI_BASE_URL,
             gemini_api_key=settings.GEMINI_API_KEY,
             gemini_base_url=settings.GEMINI_BASE_URL,
+            supported_modalities=settings.supported_modalities(),
         )
         agent.set_model(new_provider)
         logger.info(f"Model changed to {model} by {user_info['name']}")
-        return {"message": f"Model changed to {model}", "user": user_info["name"]}
+        return ModelChangeResponse(
+            message=f"Model changed to {model}",
+            user=user_info["name"],
+        )
     except Exception as e:
         logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, response_model_exclude_none=True)
 async def health_check():
     """Check if the AI backend is alive and responsive."""
     if agent is None:
-        return {"status": "unavailable", "detail": "Agent not initialized"}
+        return HealthResponse(status="unavailable", detail="Agent not initialized")
 
     try:
         model_name = agent.provider.get_model_name()
         is_healthy = agent.provider.health_check()
+        modalities = sorted(getattr(agent.provider, "supported_modalities", {"text"}))
 
         if is_healthy:
-            return {
-                "status": "healthy",
-                "provider": type(agent.provider).__name__,
-                "model": model_name,
-            }
+            return HealthResponse(
+                status="healthy",
+                provider=type(agent.provider).__name__,
+                model=model_name,
+                modalities=modalities,
+            )
         else:
-            return {
-                "status": "unhealthy",
-                "provider": type(agent.provider).__name__,
-                "model": model_name,
-                "detail": "Health check failed",
-            }
+            return HealthResponse(
+                status="unhealthy",
+                provider=type(agent.provider).__name__,
+                model=model_name,
+                modalities=modalities,
+                detail="Health check failed",
+            )
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")
-        return {
-            "status": "error",
-            "detail": str(e),
-        }
+        return HealthResponse(status="error", detail=str(e))

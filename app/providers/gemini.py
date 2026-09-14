@@ -17,7 +17,7 @@
 """Google Gemini provider for Sugar-AI."""
 import httpx
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
 from app.providers.base import BaseProvider, GenerationParams
 
@@ -27,6 +27,11 @@ _DEFAULT_TIMEOUT = 120.0
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
+def _text_of(parts: list) -> str:
+    """Join the text parts of a message, ignoring any media."""
+    return " ".join(part["text"] for part in parts if part.get("type") == "text")
+
+
 class GeminiProvider(BaseProvider):
     """Provider that connects to Google's Gemini generateContent API.
 
@@ -34,11 +39,16 @@ class GeminiProvider(BaseProvider):
     can serve any Gemini model. Only base_url and api_key differ per setup.
     """
 
+    # Gemini's generateContent takes images and audio inline on every
+    # current multimodal model.
+    default_modalities = frozenset({"text", "image", "audio"})
+
     def __init__(
         self,
         model_name: str,
         api_key: str,
         base_url: str = _DEFAULT_BASE_URL,
+        supported_modalities: Optional[Iterable[str]] = None,
     ):
         if not api_key:
             raise ValueError(
@@ -47,6 +57,7 @@ class GeminiProvider(BaseProvider):
             )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
+        self.set_supported_modalities(supported_modalities)
         self._client = httpx.Client(
             timeout=_DEFAULT_TIMEOUT,
             headers={
@@ -105,14 +116,42 @@ class GeminiProvider(BaseProvider):
         system_parts = []
         for message in messages:
             role = message.get("role", "user")
-            text = message.get("content", "")
+            content = message.get("content", "")
             if role == "system":
+                # A system instruction is text; media belongs in a turn.
+                text = content if isinstance(content, str) else _text_of(content)
                 if text:
                     system_parts.append(text)
                 continue
             gemini_role = "model" if role == "assistant" else "user"
-            contents.append({"role": gemini_role, "parts": [{"text": text}]})
+            contents.append({"role": gemini_role, "parts": self._to_parts(content)})
         return contents, "\n\n".join(system_parts)
+
+    def _to_parts(self, content) -> list[dict]:
+        """Render message content as Gemini parts."""
+        if isinstance(content, str):
+            return [{"text": content}]
+        return [self._to_part(part) for part in content]
+
+    def _to_part(self, part: dict) -> dict:
+        """Render one content part as a Gemini part.
+
+        Images and audio share inline_data; only the mime type differs.
+        """
+        kind = part.get("type")
+
+        if kind == "text":
+            return {"text": part["text"]}
+
+        if kind in ("image", "audio"):
+            return {
+                "inline_data": {
+                    "mime_type": part["mime_type"],
+                    "data": part["data"],
+                }
+            }
+
+        raise ValueError(f"Unsupported content part: {kind}")
 
     def _extract_text(self, data: dict) -> str:
         """Pull the response text out of a generateContent payload."""
