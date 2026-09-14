@@ -76,6 +76,19 @@ async def startup_event():
     app.state.agent = initialized_agent
 
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Release resources owned by the active provider."""
+    active_agent = getattr(app.state, "agent", None)
+    if active_agent is None:
+        return
+
+    try:
+        await active_agent.provider.close()
+    except Exception as error:
+        logger.warning("Failed to close provider during shutdown: %s", error)
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     logger.info(f"Starting Sugar-AI on port {port}")

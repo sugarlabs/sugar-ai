@@ -39,7 +39,7 @@ class OllamaProvider(BaseProvider):
     def __init__(self, model_name: str, base_url: str = "http://localhost:11434"):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(timeout=_DEFAULT_TIMEOUT)
+        self._client = httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
 
         logger.info(
             "OllamaProvider initialized: model=%s, server=%s",
@@ -47,7 +47,7 @@ class OllamaProvider(BaseProvider):
             self.base_url,
         )
 
-    def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
+    async def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
         """Generate text from a plain string prompt."""
         if params is None:
             params = GenerationParams()
@@ -59,7 +59,7 @@ class OllamaProvider(BaseProvider):
             "options": self._params_to_options(params),
         }
 
-        response = self._client.post(
+        response = await self._client.post(
             f"{self.base_url}/api/generate",
             json=payload,
         )
@@ -68,7 +68,7 @@ class OllamaProvider(BaseProvider):
         data = response.json()
         return data.get("response", "").strip()
 
-    def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
+    async def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
         """Generate response from chat messages."""
         if params is None:
             params = GenerationParams()
@@ -80,7 +80,7 @@ class OllamaProvider(BaseProvider):
             "options": self._params_to_options(params),
         }
 
-        response = self._client.post(
+        response = await self._client.post(
             f"{self.base_url}/api/chat",
             json=payload,
         )
@@ -90,14 +90,14 @@ class OllamaProvider(BaseProvider):
         message = data.get("message", {})
         return message.get("content", "").strip()
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the underlying HTTP client."""
-        self._client.close()
+        await self._client.aclose()
 
-    def health_check(self) -> bool:
+    async def health_check(self) -> bool:
         """Check if the Ollama server is reachable and the model is available."""
         try:
-            response = self._client.post(
+            response = await self._client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model_name,

@@ -1,15 +1,17 @@
 """
 API routes for Sugar-AI.
 """
+from datetime import datetime
+from functools import partial
+import json
+import logging
+import os
+import time
+from typing import Dict, Optional, List
+
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-import time
-import logging
-import os
-import json
-from datetime import datetime
-from typing import Dict, Optional, List
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
@@ -66,21 +68,29 @@ def check_quota(api_key: str) -> bool:
     user_quotas[api_key]["count"] += 1
     return True
 
-def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), request: Request = None):
-    """Verify API key and check quota"""
+async def verify_api_key(
+    request: Request,
+    api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    """Verify the API key and admit one provider-backed request."""
     if not api_key:
-        logger.warning(f"API key missing: {request.client.host if request else 'unknown'}")
+        logger.warning(f"API key missing: {request.client.host}")
         raise HTTPException(status_code=401, detail="API key is missing")
     
     if api_key not in settings.API_KEYS:
-        logger.warning(f"Invalid API key used: {api_key[:5]}... from {request.client.host if request else 'unknown'}")
+        logger.warning(f"Invalid API key used: {api_key[:5]}... from {request.client.host}")
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
-    if not check_quota(api_key):
-        logger.warning(f"Quota exceeded for user: {settings.API_KEYS[api_key]['name']}")
-        raise HTTPException(status_code=429, detail="Daily request quota exceeded")
-    
-    return settings.API_KEYS[api_key]
+
+    if agent is None:
+        raise HTTPException(status_code=503, detail="AI provider is not initialized")
+
+    async with agent.use_provider() as provider:
+        if not check_quota(api_key):
+            logger.warning(f"Quota exceeded for user: {settings.API_KEYS[api_key]['name']}")
+            raise HTTPException(status_code=429, detail="Daily request quota exceeded")
+
+        request.state.ai_provider = provider
+        yield settings.API_KEYS[api_key]
 
 @router.post("/ask")
 async def ask_question(
@@ -95,7 +105,10 @@ async def ask_question(
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        answer = agent.run(question)
+        answer = await agent.run(
+            question,
+            provider=request.state.ai_provider,
+        )
         
         # log completion
         process_time = time.time() - start_time
@@ -133,7 +146,10 @@ async def ask_llm(
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
     
     try:
-        answer = agent.provider.generate(question)
+        answer = await agent.generate(
+            question,
+            provider=request.state.ai_provider,
+        )
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
@@ -196,9 +212,10 @@ async def ask_llm_prompted(
                 truncation=request_data.truncation,
             )
 
-            answer = agent.run_chat_completion(
+            answer = await agent.run_chat_completion(
                 messages=messages_dict,
                 params=params,
+                provider=request.state.ai_provider,
             )
             
             process_time = time.time() - start_time
@@ -242,10 +259,11 @@ async def ask_llm_prompted(
                 truncation=request_data.truncation,
             )
 
-            answer = agent.run_with_custom_prompt(
+            answer = await agent.run_with_custom_prompt(
                 question=request_data.question,
                 custom_prompt=request_data.custom_prompt,
                 params=params,
+                provider=request.state.ai_provider,
             )
             
             process_time = time.time() - start_time
@@ -285,7 +303,11 @@ async def debug(
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
     
     try:
-        response = agent.debug(code, context)
+        response = await agent.debug(
+            code,
+            context,
+            provider=request.state.ai_provider,
+        )
         answer = response
         
         process_time = time.time() - start_time
@@ -331,8 +353,8 @@ async def change_model(
     
     try:
         from app.providers import create_provider
-        from app.config import settings
-        new_provider = create_provider(
+        provider_factory = partial(
+            create_provider,
             provider_name=settings.AI_PROVIDER,
             model_name=model,
             quantize=True,
@@ -343,7 +365,7 @@ async def change_model(
             gemini_api_key=settings.GEMINI_API_KEY,
             gemini_base_url=settings.GEMINI_BASE_URL,
         )
-        agent.set_model(new_provider)
+        await agent.replace_provider(provider_factory)
         logger.info(f"Model changed to {model} by {user_info['name']}")
         return {"message": f"Model changed to {model}", "user": user_info["name"]}
     except Exception as e:
@@ -358,19 +380,21 @@ async def health_check():
         return {"status": "unavailable", "detail": "Agent not initialized"}
 
     try:
-        model_name = agent.provider.get_model_name()
-        is_healthy = agent.provider.health_check()
+        async with agent.use_provider() as provider:
+            model_name = provider.get_model_name()
+            provider_name = type(provider).__name__
+            is_healthy = await provider.health_check()
 
         if is_healthy:
             return {
                 "status": "healthy",
-                "provider": type(agent.provider).__name__,
+                "provider": provider_name,
                 "model": model_name,
             }
         else:
             return {
                 "status": "unhealthy",
-                "provider": type(agent.provider).__name__,
+                "provider": provider_name,
                 "model": model_name,
                 "detail": "Health check failed",
             }

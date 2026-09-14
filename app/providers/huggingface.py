@@ -19,6 +19,7 @@ import torch
 from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import logging
 from typing import Optional
+from starlette.concurrency import run_in_threadpool
 
 from app.providers.base import BaseProvider, GenerationParams
 
@@ -71,10 +72,18 @@ class HuggingFaceProvider(BaseProvider):
         logger.info("HuggingFaceProvider loaded model: %s (quantized=%s, device=%s)",
                     model_name, use_quant, device)
 
-    def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        params: Optional[GenerationParams] = None,
+    ) -> str:
+        """Generate text without blocking FastAPI's event loop."""
+        params = params or GenerationParams()
+
+        return await run_in_threadpool(self._generate_sync, prompt, params)
+
+    def _generate_sync(self, prompt: str, params: GenerationParams) -> str:
         """Generate text from a plain string prompt."""
-        if params is None:
-            params = GenerationParams()
 
         response = self._pipeline(
             prompt,
@@ -94,11 +103,18 @@ class HuggingFaceProvider(BaseProvider):
 
         return generated_text
 
-    def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
-        """Generate response from chat messages."""
-        if params is None:
-            params = GenerationParams()
+    async def chat(
+        self,
+        messages: list[dict],
+        params: Optional[GenerationParams] = None,
+    ) -> str:
+        """Generate a chat response without blocking FastAPI's event loop."""
+        params = params or GenerationParams()
 
+        return await run_in_threadpool(self._chat_sync, messages, params)
+
+    def _chat_sync(self, messages: list[dict], params: GenerationParams) -> str:
+        """Generate response from chat messages."""
         normalized = self._normalize_chat_messages(messages)
         full_prompt = self._pipeline.tokenizer.apply_chat_template(
             normalized,
@@ -130,7 +146,16 @@ class HuggingFaceProvider(BaseProvider):
     def get_eos_token(self) -> Optional[str]:
         return getattr(self._pipeline.tokenizer, "eos_token", None)
 
-    def health_check(self) -> bool:
+    async def close(self) -> None:
+        """Release provider resources."""
+        # The local pipeline does not own an HTTP client to close.
+        return None
+
+    async def health_check(self) -> bool:
+        """Check the local pipeline without blocking FastAPI's event loop."""
+        return await run_in_threadpool(self._health_check_sync)
+
+    def _health_check_sync(self) -> bool:
         """Check if pipeline can generate text."""
         try:
             result = self._pipeline("test", max_new_tokens=1)

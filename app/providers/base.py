@@ -58,7 +58,7 @@ class BaseProvider:
             )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             timeout=_DEFAULT_TIMEOUT,
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -73,11 +73,11 @@ class BaseProvider:
             self.base_url,
         )
 
-    def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
+    async def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
         """Generate text from a plain prompt by wrapping it as a user message."""
-        return self.chat([{"role": "user", "content": prompt}], params)
+        return await self.chat([{"role": "user", "content": prompt}], params)
 
-    def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
+    async def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
         """Generate a response from chat messages via /chat/completions."""
         if params is None:
             params = GenerationParams()
@@ -89,7 +89,7 @@ class BaseProvider:
             **self._params_to_options(params),
         }
 
-        response = self._client.post(
+        response = await self._client.post(
             f"{self.base_url}/chat/completions",
             json=payload,
         )
@@ -105,10 +105,10 @@ class BaseProvider:
     def get_model_name(self) -> str:
         return self.model_name
 
-    def health_check(self) -> bool:
+    async def health_check(self) -> bool:
         """Verify the endpoint is reachable and the key/model are valid."""
         try:
-            response = self._client.post(
+            response = await self._client.post(
                 f"{self.base_url}/chat/completions",
                 json={
                     "model": self.model_name,
@@ -137,6 +137,6 @@ class BaseProvider:
         """Return the provider's EOS token string if one is known."""
         return None
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Release provider resources."""
-        pass
+        await self._client.aclose()
