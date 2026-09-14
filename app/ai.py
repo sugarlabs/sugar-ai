@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
-from typing import AsyncIterator, Optional, List
+from typing import AsyncIterator, Callable, Dict, Optional, List
 import app.prompts as prompts
 from app.config import settings
 from app.providers.base import BaseProvider, GenerationParams
@@ -52,10 +52,10 @@ class RAGAgent:
 
     def __init__(self, provider: BaseProvider):
         """Initialize RAGAgent with a provider."""
-        self.provider = provider
+        self.provider: BaseProvider = provider
         self.model_name = provider.get_model_name()
-        self._provider_condition = asyncio.Condition()
-        self._active_provider_requests = 0
+        self._model_change_lock = asyncio.Lock()
+        self._provider_users: Dict[int, int] = {}
         self.retriever: Optional[FAISS] = None
 
         self.prompt_template = prompts.PROMPT_TEMPLATE
@@ -67,29 +67,87 @@ class RAGAgent:
 
     @asynccontextmanager
     async def use_provider(self) -> AsyncIterator[BaseProvider]:
-        """Keep one provider active for the duration of an AI operation."""
-        async with self._provider_condition:
-            provider = self.provider
-            self._active_provider_requests += 1
+        """Hold one provider for the duration of an AI operation.
+
+        The provider is captured when the operation starts, so a model change
+        never pulls it out from under a request already using it. A retired
+        provider is closed by whichever request releases it last.
+        """
+        provider = self.provider
+        key = id(provider)
+        self._provider_users[key] = self._provider_users.get(key, 0) + 1
 
         try:
             yield provider
         finally:
-            async with self._provider_condition:
-                self._active_provider_requests -= 1
-                if self._active_provider_requests == 0:
-                    self._provider_condition.notify_all()
+            remaining = self._provider_users[key] - 1
+            if remaining:
+                self._provider_users[key] = remaining
+            else:
+                del self._provider_users[key]
+                if provider is not self.provider:
+                    await self._close_provider(provider)
 
-    async def set_model(self, provider: BaseProvider) -> None:
-        """Update the current provider."""
-        old_provider = self.provider
-        self.provider = provider
-        self.model_name = provider.get_model_name()
-        if old_provider is not provider:
+    @asynccontextmanager
+    async def _provider_operation(
+        self,
+        provider: Optional[BaseProvider] = None,
+    ) -> AsyncIterator[BaseProvider]:
+        """Use an admitted provider or acquire a new provider lease."""
+        if provider is not None:
+            yield provider
+            return
+
+        async with self.use_provider() as leased_provider:
+            yield leased_provider
+
+    async def _close_provider(self, provider: BaseProvider) -> None:
+        """Close a retired provider without disturbing live requests."""
+        try:
+            await provider.close()
+            logger.info("Closed retired provider for model %s", provider.get_model_name())
+        except Exception as error:
+            logger.warning("Failed to close retired provider: %s", error)
+
+    async def replace_provider(
+        self,
+        provider_factory: Callable[[], BaseProvider],
+    ) -> None:
+        """Install a new provider without interrupting active requests.
+
+        The replacement is built before anything is swapped, so a failed build
+        leaves the current provider serving. Requests already running keep the
+        provider they started with until they finish.
+        """
+        async with self._model_change_lock:
+            old_provider = self.provider
+            logger.info("Model change requested while serving %s", self.model_name)
+
+            new_provider = await run_in_threadpool(provider_factory)
             try:
-                await old_provider.close()
-            except Exception as e:
-                logger.warning("Failed to close previous provider: %s", e)
+                new_model_name = new_provider.get_model_name()
+            except BaseException:
+                await self._close_provider(new_provider)
+                raise
+
+            # Nothing may await between here and the swap, so no request can
+            # observe a half-changed agent.
+            previous_model_name = self.model_name
+            self.provider = new_provider
+            self.model_name = new_model_name
+            logger.info(
+                "Model changed from %s to %s", previous_model_name, new_model_name
+            )
+
+            if old_provider is not new_provider:
+                if id(old_provider) not in self._provider_users:
+                    await self._close_provider(old_provider)
+                else:
+                    logger.info(
+                        "Retired provider %s stays open for %d active request(s)",
+                        previous_model_name,
+                        self._provider_users[id(old_provider)],
+                    )
 
     def setup_vectorstore(self, file_paths: List[str]) -> Optional[FAISS]:
         """Load documents and create a vector store for retrieval."""
@@ -121,36 +179,46 @@ class RAGAgent:
                 return top_result, score
         return None, 0.0
 
-    async def debug(self, code: str, context: bool) -> str:
+    async def debug(
+        self,
+        code: str,
+        context: bool,
+        provider: Optional[BaseProvider] = None,
+    ) -> str:
         """Debug or explain python code using provider."""
-        async with self.use_provider() as provider:
+        async with self._provider_operation(provider) as active_provider:
             if context:
                 context_prompt = self.context_prompt_template.format(code=code)
-                raw_context = await provider.generate(context_prompt)
+                raw_context = await active_provider.generate(context_prompt)
 
                 kids_prompt = self.kids_context_prompt_template.format(context_output=raw_context)
-                kid_friendly = await provider.generate(kids_prompt)
+                kid_friendly = await active_provider.generate(kids_prompt)
                 return kid_friendly
 
             debug_prompt = self.debug_prompt_template.format(code=code)
-            raw_debug = await provider.generate(debug_prompt)
+            raw_debug = await active_provider.generate(debug_prompt)
 
             kids_prompt = self.kids_debug_prompt_template.format(debug_output=raw_debug)
-            kid_friendly = await provider.generate(kids_prompt)
+            kid_friendly = await active_provider.generate(kids_prompt)
             return kid_friendly
 
     async def generate(
         self,
         prompt: str,
         params: Optional[GenerationParams] = None,
+        provider: Optional[BaseProvider] = None,
     ) -> str:
         """Generate text while holding a lease on the current provider."""
-        async with self.use_provider() as provider:
-            return await provider.generate(prompt, params)
+        async with self._provider_operation(provider) as active_provider:
+            return await active_provider.generate(prompt, params)
 
-    async def run(self, question: str) -> str:
+    async def run(
+        self,
+        question: str,
+        provider: Optional[BaseProvider] = None,
+    ) -> str:
         """Process a question through the RAG pipeline."""
-        async with self.use_provider() as provider:
+        async with self._provider_operation(provider) as active_provider:
             doc_result, _ = await self.get_relevant_document(question)
             if doc_result:
                 prompt = self.prompt_template.format(
@@ -163,7 +231,7 @@ class RAGAgent:
                     context="No relevant documentation found."
                 )
 
-            first_response = await provider.generate(prompt)
+            first_response = await active_provider.generate(prompt)
 
             if "Child-friendly answer:" in first_response:
                 first_response = first_response.split("Child-friendly answer:")[-1].strip()
@@ -171,7 +239,7 @@ class RAGAgent:
                 first_response = first_response.split("Answer:")[-1].strip()
 
             child_prompt = self.child_prompt_template.format(original_answer=first_response)
-            final_response = await provider.generate(child_prompt)
+            final_response = await active_provider.generate(child_prompt)
 
             if "Child-friendly answer:" in final_response:
                 final_response = final_response.split("Child-friendly answer:")[-1].strip()
@@ -179,31 +247,33 @@ class RAGAgent:
             return final_response
 
     async def run_with_custom_prompt(self, question: str, custom_prompt: str,
-                               params: Optional[GenerationParams] = None) -> str:
+                               params: Optional[GenerationParams] = None,
+                               provider: Optional[BaseProvider] = None) -> str:
         """Process a question with custom prompt and parameters (no RAG)."""
         params = params or GenerationParams()
         full_prompt = f"{custom_prompt}\n\nQuestion: {question}\nAnswer:"
 
         try:
-            async with self.use_provider() as provider:
-                answer = await provider.generate(full_prompt, params)
+            async with self._provider_operation(provider) as active_provider:
+                answer = await active_provider.generate(full_prompt, params)
 
                 if "Answer:" in answer:
                     answer = answer.split("Answer:")[-1].strip()
 
-                return self._truncate_at_eos(answer, provider)
+                return self._truncate_at_eos(answer, active_provider)
 
         except Exception as e:
             raise Exception(f"Error generating response with custom prompt: {str(e)}")
 
     async def run_chat_completion(self, messages: list,
-                            params: Optional[GenerationParams] = None) -> str:
+                            params: Optional[GenerationParams] = None,
+                            provider: Optional[BaseProvider] = None) -> str:
         """Process chat messages using the provider's chat interface."""
         params = params or GenerationParams()
 
         try:
-            async with self.use_provider() as provider:
-                answer = await provider.chat(messages, params)
+            async with self._provider_operation(provider) as active_provider:
+                answer = await active_provider.chat(messages, params)
                 return answer
         except Exception as e:
             raise Exception(f"Error generating chat completion: {str(e)}")
