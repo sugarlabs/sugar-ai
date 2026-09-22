@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Provider selection
     AI_PROVIDER: str = 'huggingface'
     AI_MODEL: str | None = None
+    # Turn on only when the served model actually accepts image input;
+    # off, image content is dropped before the provider is called.
+    AI_SUPPORTS_IMAGES: bool = os.getenv("AI_SUPPORTS_IMAGES", "0") == "1"
     OLLAMA_BASE_URL: str = 'http://localhost:11434'
 
     # OpenAI-compatible provider (Groq, Cerebras, OpenRouter, OpenAI, Mistral, ...)

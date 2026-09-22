@@ -13,7 +13,7 @@ from typing import Dict, Optional, List
 
 from app.database import get_db, APIKey
 from app.ai import RAGAgent
-from app.providers.base import GenerationParams
+from app.providers.base import GenerationParams, apply_image_support
 from app.config import settings
 
 # Pydantic models for chat completions
@@ -343,6 +343,7 @@ async def change_model(
             gemini_api_key=settings.GEMINI_API_KEY,
             gemini_base_url=settings.GEMINI_BASE_URL,
         )
+        apply_image_support(new_provider, settings.AI_SUPPORTS_IMAGES)
         agent.set_model(new_provider)
         logger.info(f"Model changed to {model} by {user_info['name']}")
         return {"message": f"Model changed to {model}", "user": user_info["name"]}

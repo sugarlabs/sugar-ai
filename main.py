@@ -26,6 +26,7 @@ import os
 from app import create_app
 from app.ai import RAGAgent
 from app.providers import create_provider
+from app.providers.base import apply_image_support
 from app.database import get_db
 from app.auth import sync_env_keys_to_db
 from app.config import settings
@@ -66,6 +67,7 @@ async def startup_event():
         gemini_api_key=settings.GEMINI_API_KEY,
         gemini_base_url=settings.GEMINI_BASE_URL,
     )
+    apply_image_support(provider, settings.AI_SUPPORTS_IMAGES)
 
     initialized_agent = RAGAgent(provider=provider)
     initialized_agent.retriever = initialized_agent.setup_vectorstore(settings.DOC_PATHS)
