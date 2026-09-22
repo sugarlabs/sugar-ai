@@ -1,0 +1,5 @@
+# Optional NVIDIA CUDA profile. Requires a compatible NVIDIA driver.
+--extra-index-url https://download.pytorch.org/whl/cu126
+-r base.txt
+torch==2.12.1
+bitsandbytes==0.49.2

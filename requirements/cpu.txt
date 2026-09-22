@@ -1,0 +1,4 @@
+# Default profile for Windows and Linux contributors without NVIDIA CUDA.
+--extra-index-url https://download.pytorch.org/whl/cpu
+-r base.txt
+torch==2.12.1+cpu

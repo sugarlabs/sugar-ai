@@ -1,72 +1,121 @@
 # Sugar-AI Project
 
-This document describes how to run Sugar-AI, test recent changes, and troubleshoot common issues.
+This document describes how to set up Sugar-AI, run it locally, and troubleshoot common issues.
+
+## Quick start
+
+The default contributor setup uses Python and CPU-only PyTorch. A CUDA profile and the existing CUDA 12.8 Docker image are available for NVIDIA systems.
+
+### 1. Clone the repository and create a virtual environment
+
+From the repository root, run:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+On Linux or macOS, activate the environment with `source .venv/bin/activate` instead.
+
+### 2. Create the active environment file
+
+`.example.env` is the repository template. Copy it to `.env` and put local secrets and configuration in `.env`; do not commit `.env`.
+
+```powershell
+Copy-Item .example.env .env
+```
+
+On Linux or macOS:
+
+```sh
+cp .example.env .env
+```
+
+The template is configured for development mode with the small Hugging Face model `HuggingFaceTB/SmolLM2-135M-Instruct` and the documentation files included in this repository. The first start downloads the language and embedding models and builds the document index, so it can take several minutes.
+
+### 3. Install dependencies
+
+For the default CPU setup:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+`requirements.txt` selects the CPU profile. On a supported NVIDIA CUDA system, choose the CUDA profile explicitly instead:
+
+```powershell
+python -m pip install -r requirements/cuda.txt
+```
+
+The CUDA profile requires a compatible NVIDIA driver and installs the CUDA-enabled PyTorch and `bitsandbytes` packages. Do not install both profiles into the same virtual environment; create a fresh environment when switching profiles.
+
+### 4. Start the server
+
+```powershell
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+The API is available at [http://localhost:8000/](http://localhost:8000/). A successful startup ends with `Application startup complete`. Check the provider and model with:
+
+```powershell
+curl http://localhost:8000/health
+```
+
+## Environment and model selection
+
+Sugar-AI reads the active configuration from `.env`. The model is selected in this order:
+
+1. `AI_MODEL`, when set.
+2. `DEV_MODEL_NAME`, when `DEV_MODE=1`.
+3. `PROD_MODEL_NAME`, when `DEV_MODE=0`.
+
+`AI_PROVIDER` must match the model service being used. The template uses `huggingface`. For Ollama, OpenAI-compatible services, or Gemini, uncomment and configure the corresponding provider settings in `.env`.
+
+The application fails during startup when no model is configured. This gives a clear configuration error instead of passing an empty model name to a provider.
 
 ## Running Sugar-AI with Docker
 
-Sugar-AI provides a Docker-based deployment option for an isolated and reproducible environment.
+The Dockerfile preserves the existing CUDA 12.8 build and runtime images. Use this path on a host with Docker and, for GPU execution, the NVIDIA Container Toolkit. CPU contributors should use the Python CPU profile above because the Docker image still includes the CUDA runtime.
 
-### Build the Docker image
+Build the image from the repository root:
 
-Open your terminal in the project's root directory and run:
-
-```sh
-docker build -t sugar-ai .
+```powershell
+docker build -t sugar-ai:local .
 ```
 
-### Run the Docker container
+Run it with the active environment file and expose the API on port 8000:
 
-- **With GPU (using NVIDIA Docker runtime):**
-
-    ```sh
-    docker run --gpus all -it --rm sugar-ai
-    ```
-
-- **CPU-only:**
-
-    ```sh
-    docker run -it --rm sugar-ai
-    ```
-
-The container starts by executing `main.py`. To change the startup behavior, update the Dockerfile accordingly.
-
-## Testing the FastAPI App
-
-The FastAPI server provides endpoints to interact with Sugar-AI.
-
-### Install dependencies
-
-```sh
-pip install -r requirements.txt
+```powershell
+docker run --gpus all --rm --env-file .env -p 8000:8000 sugar-ai:local
 ```
+
+If the host has no NVIDIA GPU, omit `--gpus all`; the image can start with CPU execution, but it still requires the larger CUDA image and is not the recommended CPU setup.
+
+Alternatively, use Docker Compose. Compose reads `.env` at runtime and does not bake it into the image:
+
+```powershell
+docker compose up --build
+```
+
+The existing Compose configuration exposes the API at [http://localhost:443/](http://localhost:443/).
+
+The Docker build downloads dependency wheels with retries and installs them offline in the image. If a build fails while downloading a large package, run the same build again; a transient or truncated package download should not be treated as a source-code failure.
+
 ## Local Development (DEV_MODE)
 
-By default, Sugar-AI loads large language models intended for production use.
-These models may require significant memory and can cause startup failures
-on low-memory contributor machines.
+Development mode uses the lightweight model from `DEV_MODEL_NAME`, which is suitable for testing on lower-memory machines.
 
-To improve the local development experience, Sugar-AI provides a development
-mode that uses a lightweight, CPU-friendly model.
-
-### Enable DEV_MODE
-
-```bash
-DEV_MODE=1 python main.py
-```
-
-By default, `DEV_MODE` now uses a small model (`HuggingFaceTB/SmolLM2-135M-Instruct`) suitable for low-RAM machines. If you would like to use a different model for local development, set `DEV_MODEL_NAME` in your `.env` file:
+Set these values in `.env` before starting the server:
 
 ```bash
 DEV_MODE=1
 DEV_MODEL_NAME=HuggingFaceTB/SmolLM2-135M-Instruct
 ```
 
+## Testing the FastAPI App
 
-### Run the server
-
-```sh
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
+The FastAPI server provides endpoints to interact with Sugar-AI.
 
 ### Test API endpoints
 

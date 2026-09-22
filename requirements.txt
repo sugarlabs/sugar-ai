@@ -1,21 +1,3 @@
-transformers>=4.45.2
-torch>=1.12.1
-accelerate>=0.26.0
-faiss-cpu
-PyMuPDF
-langchain_community
-langchain_huggingface
-langchain_core
-langchain
-fastapi
-uvicorn
-bitsandbytes
-sqlalchemy
-jinja2
-python-multipart
-authlib
-itsdangerous
-httpx
-pydantic-settings
-sentence-transformers
-python-dotenv
+# Default local installation: CPU-only PyTorch.
+# Use requirements/cuda.txt only on a supported NVIDIA CUDA system.
+-r requirements/cpu.txt
