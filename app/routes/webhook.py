@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 import logging
 import hmac, hashlib
 import os
+import subprocess
 from dotenv import load_dotenv
 
 router = APIRouter(tags=["webhook"])
@@ -61,8 +62,11 @@ def verify_github_signature(body: bytes, signature: str) -> bool:
         return False
     
     try:
-        sha_name, signature = signature.split('=')
-        if sha_name != 'sha256':
+        parts = signature.split('=', 1)
+        if len(parts) != 2:
+            return False
+        sha_name, signature_digest = parts
+        if sha_name != 'sha256' or not signature_digest:
             return False
         
         mac = hmac.new(
@@ -70,7 +74,7 @@ def verify_github_signature(body: bytes, signature: str) -> bool:
             msg=body, 
             digestmod=hashlib.sha256
         )
-        return hmac.compare_digest(mac.hexdigest(), signature)
+        return hmac.compare_digest(mac.hexdigest(), signature_digest)
     except Exception as e:
         logger.error(f"Error verifying signature: {e}")
         return False
@@ -99,50 +103,80 @@ async def webhook(request: Request):
         
         logger.info("Webhook signature verified successfully")
         
-        # Change to repository directory
+        # Change to repository directory & perform git fetch
         logger.info(f"Changing directory to: {REPO_PATH_LOCALLY}")
-        
-        # Perform git fetch and hard reset to avoid merge conflicts
-        git_fetch_command = f"cd '{REPO_PATH_LOCALLY}' && {GIT_PATH} fetch origin main"
-        logger.info(f"Executing git fetch: {git_fetch_command}")
-        
-        fetch_result = os.system(git_fetch_command)
-        if fetch_result != 0:
-            logger.error(f"Git fetch failed with exit code: {fetch_result}")
+        logger.info("Executing git fetch")
+        try:
+            subprocess.run(
+                [GIT_PATH, "fetch", "origin", "main"],
+                cwd=REPO_PATH_LOCALLY,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30
+            )
+            logger.info("Git fetch completed successfully")
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Git fetch timed out after {e.timeout} seconds")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Git fetch timed out"}
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git fetch failed with exit code: {e.returncode}, stderr: {e.stderr}")
             return JSONResponse(
                 status_code=500, 
                 content={"status": "error", "message": "Git fetch failed"}
             )
         
-        logger.info("Git fetch completed successfully")
-        
-        # Perform hard reset to origin/CI/CD
-        git_reset_command = f"cd '{REPO_PATH_LOCALLY}' && {GIT_PATH} reset --hard origin/main"
-        logger.info(f"Executing git reset: {git_reset_command}")
-        
-        reset_result = os.system(git_reset_command)
-        if reset_result != 0:
-            logger.error(f"Git reset failed with exit code: {reset_result}")
+        # Perform hard reset to origin/main
+        logger.info("Executing git reset")
+        try:
+            subprocess.run(
+                [GIT_PATH, "reset", "--hard", "origin/main"],
+                cwd=REPO_PATH_LOCALLY,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30
+            )
+            logger.info("Git reset completed successfully")
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Git reset timed out after {e.timeout} seconds")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Git reset timed out"}
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git reset failed with exit code: {e.returncode}, stderr: {e.stderr}")
             return JSONResponse(
                 status_code=500, 
                 content={"status": "error", "message": "Git reset failed"}
             )
         
-        logger.info("Git reset completed successfully")
-        
         # Restart the service
-        restart_command = "sudo systemctl restart sugarai"
-        logger.info(f"Executing service restart: {restart_command}")
-        
-        restart_result = os.system(restart_command)
-        if restart_result != 0:
-            logger.error(f"Service restart failed with exit code: {restart_result}")
+        logger.info("Executing service restart")
+        try:
+            subprocess.run(
+                ["sudo", "systemctl", "restart", "sugarai"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30
+            )
+            logger.info("Service restarted successfully")
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Service restart timed out after {e.timeout} seconds")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Service restart timed out"}
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Service restart failed with exit code: {e.returncode}, stderr: {e.stderr}")
             return JSONResponse(
                 status_code=500, 
                 content={"status": "error", "message": "Service restart failed"}
             )
-        
-        logger.info("Service restarted successfully")
         
         return JSONResponse(
             status_code=200, 
