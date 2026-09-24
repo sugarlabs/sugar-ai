@@ -37,6 +37,9 @@ class GenerationParams:
     repetition_penalty: float = 1.1
     truncation: bool = True
     do_sample: bool = True
+    # Toggle the model's internal chain-of-thought reasoning. Defaults off so simple
+    # queries stay fast and cheap; callers opt in per request when a task needs it.
+    think: Optional[bool] = False
 
     def __post_init__(self):
         object.__setattr__(self, "do_sample", self.temperature > 0)

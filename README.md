@@ -194,7 +194,8 @@ Sugar-AI provides three different endpoints for different use cases:
         "repetition_penalty": 1.1,
         "temperature": 0.7,
         "top_p": 0.9,
-        "top_k": 50
+        "top_k": 50,
+        "think": false
       }'
     ```
 
@@ -220,7 +221,8 @@ Sugar-AI provides three different endpoints for different use cases:
         "max_length": 512,
         "temperature": 0.6,
         "top_p": 0.9,
-        "top_k": 50
+        "top_k": 50,
+        "think": false
       }'
     ```
     - Send chat history with roles `system`, `user`, and `assistant`.
@@ -237,6 +239,7 @@ Sugar-AI provides three different endpoints for different use cases:
     - `temperature` (optional, default: 0.7): Controls randomness (0.0 = deterministic, 1.0 = very random)
     - `top_p` (optional, default: 0.9): Nucleus sampling (0.1 = focused, 0.9 = diverse)
     - `top_k` (optional, default: 50): Limits vocabulary to K most likely words
+    - `think` (optional, default: false): Enable model reasoning for this request. See [Reasoning (think / no-think)](#reasoning-think--no-think) below.
 
     **Response Format (Prompted mode):**
     ```json
@@ -250,7 +253,8 @@ Sugar-AI provides three different endpoints for different use cases:
         "repetition_penalty": 1.1,
         "temperature": 0.7,
         "top_p": 0.9,
-        "top_k": 50
+        "top_k": 50,
+        "think": false
       }
     }
     ```
@@ -276,7 +280,8 @@ Sugar-AI provides three different endpoints for different use cases:
         "repetition_penalty": 1.1,
         "temperature": 0.6,
         "top_p": 0.9,
-        "top_k": 50
+        "top_k": 50,
+        "think": false
       }
     }
     ```
@@ -296,6 +301,37 @@ Sugar-AI provides three different endpoints for different use cases:
     - **For Code**: `temperature: 0.2-0.4, top_p: 0.8, repetition_penalty: 1.1`
     - **For Creative Content**: `temperature: 0.7-0.9, top_p: 0.9, repetition_penalty: 1.2`
     - **For Factual Answers**: `temperature: 0.3-0.5, top_p: 0.7, repetition_penalty: 1.0`
+
+### Reasoning (think / no-think)
+
+Reasoning-capable models can spend extra tokens on reasoning before answering. This can help multi-step tasks, but it costs extra latency and tokens. Sugar-AI keeps reasoning off by default on every endpoint and exposes it as an opt-in `think` flag.
+
+`think` is accepted on all generation endpoints. On `/ask`, `/ask-llm`, and `/debug`, it is a query flag. On `/ask-llm-prompted`, it goes in the JSON body alongside the other generation parameters. If callers omit it, the endpoint behaves as before with no-think.
+
+```sh
+# simple endpoint: think is a query flag
+curl -X POST "http://localhost:8000/ask-llm?question=Explain%20recursion&think=true" \
+  -H "X-API-Key: sugarai2024"
+
+# prompted endpoint: think goes in the JSON body
+curl -X POST "http://localhost:8000/ask-llm-prompted" \
+  -H "X-API-Key: sugarai2024" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Refactor this recursive function to be iterative and explain the tradeoffs.",
+    "custom_prompt": "You are a senior Python mentor.",
+    "think": true,
+    "max_length": 1024
+  }'
+```
+
+Things to know:
+- Default is no-think everywhere. Existing callers that omit `think` are unaffected.
+- On `/ask` and `/debug`, `think=true` applies to the first answer or analysis stage only. The child-friendly rewrite stage always runs no-think.
+- Ollama is the only provider that honors `think` today. The OpenAI-compatible base provider, Gemini, and HuggingFace currently ignore it.
+- Some Ollama models reject the `think` field. Sugar-AI retries once without `think` so those models can still return an answer.
+- Model behavior is capability dependent. Pure reasoning or reasoning-style models may still include reasoning text even when `think=false`.
+- Reasoning shares the output token budget with the answer, so Sugar-AI adds `THINKING_HEADROOM` tokens when `think=true`. The default is 2048 and can be changed in `.env`.
 
 ### API Authentication
 
