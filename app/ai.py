@@ -53,8 +53,8 @@ class RAGAgent:
         self.model_name = provider.get_model_name()
         self.retriever: Optional[FAISS] = None
 
-        self.prompt_template = prompts.PROMPT_TEMPLATE
-        self.child_prompt_template = prompts.CHILD_FRIENDLY_PROMPT
+        self.system_prompt_template = prompts.SYSTEM_PROMPT_TEMPLATE
+        self.child_system_prompt_template = prompts.CHILD_SYSTEM_PROMPT
         self.debug_prompt_template = prompts.CODE_DEBUG_PROMPT
         self.context_prompt_template = prompts.CODE_CONTEXT_PROMPT
         self.kids_debug_prompt_template = prompts.KIDS_DEBUG_PROMPT
@@ -135,28 +135,27 @@ class RAGAgent:
         """
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
-            prompt = self.prompt_template.format(
-                question=question,
+            system_prompt = self.system_prompt_template.format(
                 context=doc_result.page_content
             )
         else:
-            prompt = self.prompt_template.format(
-                question=question,
+            system_prompt = self.system_prompt_template.format(
                 context="No relevant documentation found."
             )
 
-        first_response = self.provider.generate(prompt, params)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question}
+        ]
 
-        if "Child-friendly answer:" in first_response:
-            first_response = first_response.split("Child-friendly answer:")[-1].strip()
-        elif "Answer:" in first_response:
-            first_response = first_response.split("Answer:")[-1].strip()
+        first_response = self.provider.chat(messages, params)
 
-        child_prompt = self.child_prompt_template.format(original_answer=first_response)
-        final_response = self.provider.generate(child_prompt)
-
-        if "Child-friendly answer:" in final_response:
-            final_response = final_response.split("Child-friendly answer:")[-1].strip()
+        child_system = self.child_system_prompt_template
+        child_messages = [
+            {"role": "system", "content": child_system},
+            {"role": "user", "content": first_response}
+        ]
+        final_response = self.provider.chat(child_messages)
 
         return final_response
 
