@@ -27,7 +27,6 @@ class PromptedLLMRequest(BaseModel):
     question: Optional[str] = Field(None, description="The question to ask (required if chat=False)")
     custom_prompt: Optional[str] = Field(None, description="Custom prompt to replace system prompt (required if chat=False)")
     messages: Optional[List[ChatMessage]] = Field(None, description="List of chat messages (required if chat=True)")
-    
     # Boundary validation added below:
     max_length: int = Field(1024, gt=0, le=8192, description="Maximum length of generated text")
     truncation: bool = Field(True, description="Whether to truncate input if too long")
@@ -35,6 +34,7 @@ class PromptedLLMRequest(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for sampling")
     top_p: float = Field(0.9, gt=0.0, le=1.0, description="Top-p (nucleus) sampling parameter")
     top_k: int = Field(50, ge=0, description="Top-k sampling parameter")
+    think: bool = Field(False, description="Enable model reasoning (Ollama only, defaults off)")
 
 router = APIRouter(tags=["api"])
 
@@ -46,6 +46,15 @@ agent = None
 
 # user quotas tracking
 user_quotas: Dict[str, Dict] = {}
+
+def budget_with_headroom(base_max_tokens: int, think: bool) -> int:
+    """Add reasoning headroom to the token budget when think is on.
+
+    Reasoning shares the output token budget with the answer, so without extra
+    room the chain-of-thought can consume it all and starve the answer to empty.
+    """
+    return base_max_tokens + settings.THINKING_HEADROOM if think else base_max_tokens
+
 
 def check_quota(api_key: str) -> bool:
     """Check if a user has exceeded their daily quota"""
@@ -84,18 +93,20 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key"), req
 
 @router.post("/ask")
 async def ask_question(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    question: str,
+    think: bool = False,
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process a question using RAG pipeline"""
     start_time = time.time()
-    
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
-    
+
     try:
-        answer = agent.run(question)
+        params = GenerationParams(think=think, max_new_tokens=budget_with_headroom(1024, think))
+        answer = agent.run(question, params)
         
         # log completion
         process_time = time.time() - start_time
@@ -122,18 +133,20 @@ async def ask_question(
 
 @router.post("/ask-llm")
 async def ask_llm(
-    question: str, 
-    user_info: dict = Depends(verify_api_key), 
+    question: str,
+    think: bool = False,
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process a question with direct LLM call (no retrieval)"""
     start_time = time.time()
-    
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /ask-llm - User: {user_info['name']} - IP: {client_ip} - Question: {question[:50]}...")
-    
+
     try:
-        answer = agent.provider.generate(question)
+        params = GenerationParams(think=think, max_new_tokens=budget_with_headroom(1024, think))
+        answer = agent.provider.generate(question, params)
         
         process_time = time.time() - start_time
         logger.info(f"RESPONSE - User: {user_info['name']} - Success - Time: {process_time:.2f}s")
@@ -167,6 +180,8 @@ async def ask_llm_prompted(
     api_key = next(key for key, value in settings.API_KEYS.items() if value['name'] == user_info['name'])
     remaining = settings.MAX_DAILY_REQUESTS - user_quotas.get(api_key, {}).get("count", 0)
     
+    effective_max_tokens = budget_with_headroom(request_data.max_length, request_data.think)
+
     try:
         if request_data.chat:
             # Chat completions mode
@@ -188,12 +203,13 @@ async def ask_llm_prompted(
             
             # Build generation params from request
             params = GenerationParams(
-                max_new_tokens=request_data.max_length,
+                max_new_tokens=effective_max_tokens,
                 temperature=request_data.temperature,
                 top_p=request_data.top_p,
                 top_k=request_data.top_k,
                 repetition_penalty=request_data.repetition_penalty,
                 truncation=request_data.truncation,
+                think=request_data.think,
             )
 
             answer = agent.run_chat_completion(
@@ -222,7 +238,8 @@ async def ask_llm_prompted(
                     "repetition_penalty": request_data.repetition_penalty,
                     "temperature": request_data.temperature,
                     "top_p": request_data.top_p,
-                    "top_k": request_data.top_k
+                    "top_k": request_data.top_k,
+                    "think": request_data.think
                 }
             }
         else:
@@ -234,12 +251,13 @@ async def ask_llm_prompted(
             logger.info(f"CUSTOM PROMPT - User: {user_info['name']} - Prompt: {request_data.custom_prompt[:100]}...")
             
             params = GenerationParams(
-                max_new_tokens=request_data.max_length,
+                max_new_tokens=effective_max_tokens,
                 temperature=request_data.temperature,
                 top_p=request_data.top_p,
                 top_k=request_data.top_k,
                 repetition_penalty=request_data.repetition_penalty,
                 truncation=request_data.truncation,
+                think=request_data.think,
             )
 
             answer = agent.run_with_custom_prompt(
@@ -261,7 +279,8 @@ async def ask_llm_prompted(
                     "repetition_penalty": request_data.repetition_penalty,
                     "temperature": request_data.temperature,
                     "top_p": request_data.top_p,
-                    "top_k": request_data.top_k
+                    "top_k": request_data.top_k,
+                    "think": request_data.think
                 }
             }
         
@@ -273,19 +292,21 @@ async def ask_llm_prompted(
         
 @router.post("/debug")
 async def debug(
-    code: str, 
+    code: str,
     context: bool,
-    user_info: dict = Depends(verify_api_key), 
+    think: bool = False,
+    user_info: dict = Depends(verify_api_key),
     request: Request = None
 ):
     """Process python code for debugging"""
     start_time = time.time()
-    
+
     client_ip = request.client.host if request else "unknown"
     logger.info(f"REQUEST - /debug - User: {user_info['name']} - IP: {client_ip} - code: {code[:50]}...")
-    
+
     try:
-        response = agent.debug(code, context)
+        params = GenerationParams(think=think, max_new_tokens=budget_with_headroom(1024, think))
+        response = agent.debug(code, context, params)
         answer = response
         
         process_time = time.time() - start_time

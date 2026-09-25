@@ -105,25 +105,34 @@ class RAGAgent:
                 return top_result, score
         return None, 0.0
 
-    def debug(self, code: str, context: bool) -> str:
-        """Debug or explain python code using provider."""
+    def debug(self, code: str, context: bool,
+              params: Optional[GenerationParams] = None) -> str:
+        """Debug or explain python code using provider.
+
+        params (which may enable reasoning) applies to the analysis stage only;
+        the child-friendly rewrite always runs no-think.
+        """
         if context:
             context_prompt = self.context_prompt_template.format(code=code)
-            raw_context = self.provider.generate(context_prompt)
+            raw_context = self.provider.generate(context_prompt, params)
 
             kids_prompt = self.kids_context_prompt_template.format(context_output=raw_context)
             kid_friendly = self.provider.generate(kids_prompt)
             return kid_friendly
         else:
             debug_prompt = self.debug_prompt_template.format(code=code)
-            raw_debug = self.provider.generate(debug_prompt)
+            raw_debug = self.provider.generate(debug_prompt, params)
 
             kids_prompt = self.kids_debug_prompt_template.format(debug_output=raw_debug)
             kid_friendly = self.provider.generate(kids_prompt)
             return kid_friendly
 
-    def run(self, question: str) -> str:
-        """Process a question through the RAG pipeline."""
+    def run(self, question: str, params: Optional[GenerationParams] = None) -> str:
+        """Process a question through the RAG pipeline.
+
+        params (which may enable reasoning) applies to the answer stage only;
+        the child-friendly rewrite always runs no-think.
+        """
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
             system_prompt = self.system_prompt_template.format(
@@ -138,8 +147,8 @@ class RAGAgent:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question}
         ]
-        
-        first_response = self.provider.chat(messages)
+
+        first_response = self.provider.chat(messages, params)
 
         child_system = self.child_system_prompt_template
         child_messages = [
