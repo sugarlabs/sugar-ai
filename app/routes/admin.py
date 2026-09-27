@@ -31,6 +31,7 @@ async def admin_panel(
     denied_keys = db.query(APIKey).filter(APIKey.approved == False, APIKey.is_active == True).all()
     
     return templates.TemplateResponse(
+        request,
         "admin_panel.html", 
         {
             "request": request,

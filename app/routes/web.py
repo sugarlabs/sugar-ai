@@ -18,7 +18,7 @@ templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 @router.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Render welcome page"""
-    return templates.TemplateResponse("welcome.html", {"request": request})
+    return templates.TemplateResponse(request, "welcome.html", {"request": request})
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, db: Session = Depends(get_db)):
@@ -64,7 +64,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     if user and user.get("can_change_model", False):
         admin_url = "/admin"
     
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse(request, "dashboard.html", {
         "request": request,
         "user": user,
         "api_key": api_key,

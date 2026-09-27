@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.ai import RAGAgent
+from app.providers.base import GenerationParams
 
 
 class FakeProvider:
@@ -33,6 +34,7 @@ class FakeProvider:
         self.close_calls = 0
         self.close_error = None
         self.prompts = []
+        self.generation_params = []
         self.entered = asyncio.Event()
         self.release = None
 
@@ -41,6 +43,7 @@ class FakeProvider:
 
     async def generate(self, prompt, params=None):
         self.prompts.append(prompt)
+        self.generation_params.append(params)
         self.entered.set()
         if self.release is not None:
             await self.release.wait()
@@ -137,6 +140,27 @@ async def test_held_provider_is_reused_without_being_counted_twice():
 
     assert answer == "old:hi"
     assert agent._provider_users == {}
+
+
+async def test_run_applies_reasoning_params_only_to_answer_stage():
+    provider = FakeProvider("model")
+    agent = make_agent(provider)
+    agent.retriever = None
+    params = GenerationParams(think=True)
+
+    await agent.run("Why is the sky blue?", params=params)
+
+    assert provider.generation_params == [params, None]
+
+
+async def test_debug_applies_reasoning_params_only_to_analysis_stage():
+    provider = FakeProvider("model")
+    agent = make_agent(provider)
+    params = GenerationParams(think=True)
+
+    await agent.debug("print('hello')", context=False, params=params)
+
+    assert provider.generation_params == [params, None]
 
 
 # --- Swapping while requests run -------------------------------------------

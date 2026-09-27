@@ -36,18 +36,29 @@ logger = logging.getLogger("sugar-ai")
 
 app = create_app()
 
+
+def get_active_model() -> str:
+    """Resolve the configured model and fail clearly when none is selected."""
+    active_model = (
+        settings.AI_MODEL
+        or (settings.DEV_MODEL_NAME if settings.DEV_MODE else settings.PROD_MODEL_NAME)
+    )
+    if active_model:
+        return active_model
+
+    fallback_name = "DEV_MODEL_NAME" if settings.DEV_MODE else "PROD_MODEL_NAME"
+    raise RuntimeError(
+        "No model is configured. Set AI_MODEL, or set "
+        f"{fallback_name} for the selected DEV_MODE value in .env."
+    )
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize data on app startup"""
+    active_model = get_active_model()
     db = next(get_db())
     sync_env_keys_to_db(db)
-    # Determine model name: AI_MODEL takes priority, then DEV/PROD fallback
-    if settings.AI_MODEL:
-        active_model = settings.AI_MODEL
-    elif settings.DEV_MODE:
-        active_model = settings.DEV_MODEL_NAME
-    else:
-        active_model = settings.PROD_MODEL_NAME
 
     logger.info(
         "Starting with provider=%s, model=%s",

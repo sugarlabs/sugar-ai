@@ -15,10 +15,11 @@
 
 
 """HuggingFace Transformers provider for Sugar-AI."""
+import asyncio
 import torch
 from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import logging
-from typing import Optional
+from typing import Any, Callable, Optional
 from starlette.concurrency import run_in_threadpool
 
 from app.providers.base import BaseProvider, GenerationParams
@@ -33,6 +34,9 @@ class HuggingFaceProvider(BaseProvider):
         """Load a HuggingFace model into memory."""
         self.model_name = model_name
         self._dev_mode = dev_mode
+        self._inference_queue = asyncio.Queue()
+        self._inference_worker: Optional[asyncio.Task] = None
+        self._closed = False
 
         use_quant = quantize and torch.cuda.is_available() and not dev_mode
         device = 0 if torch.cuda.is_available() and not dev_mode else -1
@@ -80,7 +84,7 @@ class HuggingFaceProvider(BaseProvider):
         """Generate text without blocking FastAPI's event loop."""
         params = params or GenerationParams()
 
-        return await run_in_threadpool(self._generate_sync, prompt, params)
+        return await self._submit_inference(self._generate_sync, prompt, params)
 
     def _generate_sync(self, prompt: str, params: GenerationParams) -> str:
         """Generate text from a plain string prompt."""
@@ -111,7 +115,7 @@ class HuggingFaceProvider(BaseProvider):
         """Generate a chat response without blocking FastAPI's event loop."""
         params = params or GenerationParams()
 
-        return await run_in_threadpool(self._chat_sync, messages, params)
+        return await self._submit_inference(self._chat_sync, messages, params)
 
     def _chat_sync(self, messages: list[dict], params: GenerationParams) -> str:
         """Generate response from chat messages."""
@@ -148,12 +152,56 @@ class HuggingFaceProvider(BaseProvider):
 
     async def close(self) -> None:
         """Release provider resources."""
-        # The local pipeline does not own an HTTP client to close.
-        return None
+        if self._closed:
+            return
+
+        self._closed = True
+        if self._inference_worker is None:
+            return
+
+        # The sentinel is queued after any accepted work, so shutdown never
+        # abandons a caller that is already awaiting an inference result.
+        await self._inference_queue.put((None, (), None))
+        await self._inference_worker
+        self._inference_worker = None
 
     async def health_check(self) -> bool:
         """Check the local pipeline without blocking FastAPI's event loop."""
-        return await run_in_threadpool(self._health_check_sync)
+        return await self._submit_inference(self._health_check_sync)
+
+    async def _submit_inference(self, operation: Callable[..., Any], *args: Any) -> Any:
+        """Queue one pipeline operation and await its individual result."""
+        if self._closed:
+            raise RuntimeError("HuggingFaceProvider is closed")
+
+        if self._inference_worker is None:
+            self._inference_worker = asyncio.create_task(self._run_inference_worker())
+
+        result_future = asyncio.get_running_loop().create_future()
+        await self._inference_queue.put((operation, args, result_future))
+        return await result_future
+
+    async def _run_inference_worker(self) -> None:
+        """Run queued pipeline operations one at a time off the event loop."""
+        while True:
+            operation, args, result_future = await self._inference_queue.get()
+            try:
+                if operation is None:
+                    return
+
+                # A client may disconnect while its request is waiting. In
+                # that case, skip work that never reached the pipeline.
+                if result_future.cancelled():
+                    continue
+
+                result = await run_in_threadpool(operation, *args)
+                if not result_future.cancelled():
+                    result_future.set_result(result)
+            except Exception as error:
+                if not result_future.cancelled():
+                    result_future.set_exception(error)
+            finally:
+                self._inference_queue.task_done()
 
     def _health_check_sync(self) -> bool:
         """Check if pipeline can generate text."""

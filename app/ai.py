@@ -188,20 +188,25 @@ class RAGAgent:
         self,
         code: str,
         context: bool,
+        params: Optional[GenerationParams] = None,
         provider: Optional[BaseProvider] = None,
     ) -> str:
-        """Debug or explain python code using provider."""
+        """Debug or explain python code using provider.
+
+        params (which may enable reasoning) applies to the analysis stage only;
+        the child-friendly rewrite always runs no-think.
+        """
         async with self._provider_operation(provider) as active_provider:
             if context:
                 context_prompt = self.context_prompt_template.format(code=code)
-                raw_context = await active_provider.generate(context_prompt)
+                raw_context = await active_provider.generate(context_prompt, params)
 
                 kids_prompt = self.kids_context_prompt_template.format(context_output=raw_context)
                 kid_friendly = await active_provider.generate(kids_prompt)
                 return kid_friendly
 
             debug_prompt = self.debug_prompt_template.format(code=code)
-            raw_debug = await active_provider.generate(debug_prompt)
+            raw_debug = await active_provider.generate(debug_prompt, params)
 
             kids_prompt = self.kids_debug_prompt_template.format(debug_output=raw_debug)
             kid_friendly = await active_provider.generate(kids_prompt)
@@ -220,9 +225,14 @@ class RAGAgent:
     async def run(
         self,
         question: str,
+        params: Optional[GenerationParams] = None,
         provider: Optional[BaseProvider] = None,
     ) -> str:
-        """Process a question through the RAG pipeline."""
+        """Process a question through the RAG pipeline.
+
+        params (which may enable reasoning) applies to the answer stage only;
+        the child-friendly rewrite always runs no-think.
+        """
         async with self._provider_operation(provider) as active_provider:
             doc_result, _ = await self.get_relevant_document(question)
             if doc_result:
@@ -236,7 +246,7 @@ class RAGAgent:
                     context="No relevant documentation found."
                 )
 
-            first_response = await active_provider.generate(prompt)
+            first_response = await active_provider.generate(prompt, params)
 
             if "Child-friendly answer:" in first_response:
                 first_response = first_response.split("Child-friendly answer:")[-1].strip()
