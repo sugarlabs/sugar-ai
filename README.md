@@ -113,6 +113,21 @@ DEV_MODE=1
 DEV_MODEL_NAME=HuggingFaceTB/SmolLM2-135M-Instruct
 ```
 
+## Persisting the FAISS index
+
+The first startup embeds the `DOC_PATHS` documents and caches the built FAISS
+index in `FAISS_INDEX_PATH` (default `faiss_index/`, git-ignored). Subsequent
+restarts load the cached index from disk instead of re-embedding, so the server
+becomes ready much faster. A fingerprint of the source files is stored next to
+the index; editing, adding, or removing a document automatically triggers a
+rebuild on the next startup.
+
+- To use a different cache location (e.g. a Docker volume so the cache survives
+  container rebuilds), set `FAISS_INDEX_PATH` in `.env` and mount it, e.g.
+  `docker run ... -v sugarai-faiss:/app/faiss_index ...`.
+- To force a full rebuild once (e.g. after changing the embedding model),
+  set `FAISS_REBUILD_INDEX=1` for one startup, then unset it.
+
 ## Testing the FastAPI App
 
 The FastAPI server provides endpoints to interact with Sugar-AI.
