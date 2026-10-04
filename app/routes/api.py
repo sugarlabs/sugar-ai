@@ -8,6 +8,7 @@ import time
 import logging
 import os
 import json
+import secrets
 from datetime import datetime
 from typing import Dict, Optional, List
 
@@ -20,6 +21,11 @@ from app.config import settings
 class ChatMessage(BaseModel):
     role: str  # "system", "user", "assistant" 
     content: str
+
+class ChangeModelRequest(BaseModel):
+    """Request model for secure model switching via body."""
+    model: str = Field(..., min_length=1, description="Name of the model to activate")
+    password: str = Field(..., min_length=1, description="Admin password to authorize model switch")
 
 class PromptedLLMRequest(BaseModel):
     """Request model for ask-llm-prompted endpoint"""
@@ -328,34 +334,68 @@ async def debug(
 
 @router.post("/change-model")
 async def change_model(
-    model: str, 
-    api_key: str = Query(...), 
-    password: str = Query(...), 
-    request: Request = None
+    request_data: Optional[ChangeModelRequest] = None,
+    api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    # Deprecated legacy query parameters preserved for graceful backwards compatibility
+    legacy_model: Optional[str] = Query(None, alias="model", include_in_schema=False),
+    legacy_api_key: Optional[str] = Query(None, alias="api_key", include_in_schema=False),
+    legacy_password: Optional[str] = Query(None, alias="password", include_in_schema=False),
+    request: Request = None,
 ):
-    """Change the model used by the RAG agent (admin only)"""
+    """Change the model used by the RAG agent (admin only).
+
+    Credentials must be provided via the `X-API-Key` header and JSON request body
+    to avoid exposing sensitive data in URL query parameters (CWE-598).
+    """
     client_ip = request.client.host if request else "unknown"
-    logger.info(f"REQUEST - /change-model - API Key: {api_key[:5]}... - IP: {client_ip} - Model: {model}")
-    
-    if api_key not in settings.API_KEYS:
-        logger.warning(f"Invalid API key used for model change: {api_key[:5]}... from {client_ip}")
+
+    # Resolve model, api_key, and password from header/body or legacy query params
+    effective_key = api_key or legacy_api_key
+    if request_data:
+        effective_model = request_data.model
+        effective_password = request_data.password
+    else:
+        effective_model = legacy_model
+        effective_password = legacy_password
+
+    if legacy_api_key or legacy_password:
+        logger.warning(
+            f"DEPRECATION WARNING: Passing credentials in URL query parameters is insecure (CWE-598). "
+            f"Please send credentials via X-API-Key header and JSON request body instead. Client IP: {client_ip}"
+        )
+
+    if not effective_key:
+        logger.warning(f"API key missing for model change from: {client_ip}")
+        raise HTTPException(status_code=401, detail="API key is missing")
+
+    if not effective_model or not effective_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Both 'model' and 'password' are required in the request body."
+        )
+
+    logger.info(f"REQUEST - /change-model - API Key: {effective_key[:5]}... - IP: {client_ip} - Model: {effective_model}")
+
+    if effective_key not in settings.API_KEYS:
+        logger.warning(f"Invalid API key used for model change: {effective_key[:5]}... from {client_ip}")
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
-    user_info = settings.API_KEYS[api_key]
+
+    user_info = settings.API_KEYS[effective_key]
     if not user_info.get("can_change_model", False):
         logger.warning(f"Unauthorized model change attempt by: {user_info['name']} from {client_ip}")
         raise HTTPException(status_code=403, detail="User doesn't have permission to change model")
-    
-    if password != settings.MODEL_CHANGE_PASSWORD:
+
+    # Constant-time comparison to protect against timing attacks (CWE-208)
+    if not secrets.compare_digest(effective_password, settings.MODEL_CHANGE_PASSWORD):
         logger.warning(f"Invalid password for model change by: {user_info['name']} from {client_ip}")
         raise HTTPException(status_code=403, detail="Invalid model change password")
-    
+
     try:
         from app.providers import create_provider
-        from app.config import settings
+
         new_provider = create_provider(
             provider_name=settings.AI_PROVIDER,
-            model_name=model,
+            model_name=effective_model,
             quantize=True,
             dev_mode=False,
             base_url=settings.OLLAMA_BASE_URL,
@@ -365,10 +405,10 @@ async def change_model(
             gemini_base_url=settings.GEMINI_BASE_URL,
         )
         agent.set_model(new_provider)
-        logger.info(f"Model changed to {model} by {user_info['name']}")
-        return {"message": f"Model changed to {model}", "user": user_info["name"]}
+        logger.info(f"Model changed to {effective_model} by {user_info['name']}")
+        return {"message": f"Model changed to {effective_model}", "user": user_info["name"]}
     except Exception as e:
-        logger.error(f"Error changing model to {model} by {user_info['name']}: {str(e)}")
+        logger.error(f"Error changing model to {effective_model} by {user_info['name']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error changing model: {str(e)}")
 
 

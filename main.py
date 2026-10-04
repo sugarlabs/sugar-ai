@@ -26,7 +26,7 @@ import os
 from app import create_app
 from app.ai import RAGAgent
 from app.providers import create_provider
-from app.database import get_db
+from app.database import get_db, get_db_context
 from app.auth import sync_env_keys_to_db
 from app.config import settings
 from app.routes import api
@@ -57,8 +57,8 @@ def get_active_model() -> str:
 async def startup_event():
     """Initialize data on app startup"""
     active_model = get_active_model()
-    db = next(get_db())
-    sync_env_keys_to_db(db)
+    with get_db_context() as db:
+        sync_env_keys_to_db(db)
 
     logger.info(
         "Starting with provider=%s, model=%s",

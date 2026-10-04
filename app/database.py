@@ -5,6 +5,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import datetime
+from contextlib import contextmanager
 from typing import Dict, Any, Generator
 
 # database connection
@@ -44,10 +45,22 @@ def create_tables() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def get_db() -> Generator[Session, None, None]:
-    """Database dependency for FastAPI endpoints"""
+@contextmanager
+def get_db_context() -> Generator[Session, None, None]:
+    """Context manager for standalone database operations outside FastAPI endpoint dependencies.
+
+    Ensures the session is cleanly closed and connection pool resources are returned,
+    preventing resource leaks caused by incomplete generator calls.
+    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Database dependency for FastAPI endpoints."""
+    with get_db_context() as db:
+        yield db
+

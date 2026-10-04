@@ -16,7 +16,7 @@ from authlib.integrations.starlette_client import OAuth
 from starlette.responses import RedirectResponse
 from dotenv import load_dotenv
 
-from app.database import APIKey, get_db
+from app.database import APIKey, get_db, get_db_context
 
 # load environment variables
 load_dotenv()
@@ -50,10 +50,29 @@ oauth.register(
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def setup_oauth(app):
-    """Configure the FastAPI app with OAuth and session middleware"""
+    """Configure the FastAPI app with OAuth and session middleware.
+
+    If SESSION_SECRET_KEY is not configured, generates an ephemeral cryptographically
+    strong secret in production to prevent cookie forgery via well-known default secrets.
+    """
+    secret_key = os.getenv("SESSION_SECRET_KEY")
+    if not secret_key:
+        from app.config import settings
+        if settings.DEV_MODE:
+            logger.warning(
+                "SESSION_SECRET_KEY not set. Using dev fallback. "
+                "Do NOT run with this configuration in production!"
+            )
+            secret_key = "dev-secret-key-change-in-production"
+        else:
+            logger.warning(
+                "SESSION_SECRET_KEY not set in production. Generating an ephemeral secret key."
+            )
+            secret_key = secrets.token_hex(32)
+
     app.add_middleware(
         SessionMiddleware, 
-        secret_key=os.getenv("SESSION_SECRET_KEY", "supersecretkey")
+        secret_key=secret_key
     )
     return app
 
@@ -63,10 +82,10 @@ async def get_oauth_user_info(request: Request) -> Optional[Dict[str, Any]]:
     
     if user_info and "email" in user_info:
         try:
-            db = next(get_db())
-            api_key = db.query(APIKey).filter(APIKey.email == user_info["email"]).first()
-            if api_key:
-                user_info["can_change_model"] = api_key.can_change_model
+            with get_db_context() as db:
+                api_key = db.query(APIKey).filter(APIKey.email == user_info["email"]).first()
+                if api_key:
+                    user_info["can_change_model"] = api_key.can_change_model
         except Exception as e:
             logger.error(f"Error enriching OAuth user info: {str(e)}")
     
