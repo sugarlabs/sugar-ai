@@ -130,6 +130,17 @@ class HuggingFaceProvider(BaseProvider):
     def get_eos_token(self) -> Optional[str]:
         return getattr(self._pipeline.tokenizer, "eos_token", None)
 
+    def close(self) -> None:
+        """Drop the loaded pipeline and free the device memory it held.
+
+        This provider runs inference locally and holds no HTTP client, so it
+        cannot use the base implementation. Switching models leaves several
+        GB of weights resident otherwise, which on a single-GPU box means the
+        next model fails to load."""
+        self._pipeline = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def health_check(self) -> bool:
         """Check if pipeline can generate text."""
         try:
