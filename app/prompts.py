@@ -13,19 +13,12 @@ You are a highly intelligent Python coding assistant built for kids using the Su
 
 Context from documentation:
 {context}
-
-Question: {question}
-Answer:
 """
 
 CHILD_FRIENDLY_PROMPT = """
 Your task is to answer children's questions using simple language.
 You will be given an answer, you will have to paraphrase it.
 Explain any difficult words in a way a 5-12-years-old can understand.
-
-Original answer: {original_answer}
-
-Child-friendly answer:
 """
 
 CODE_DEBUG_PROMPT = """

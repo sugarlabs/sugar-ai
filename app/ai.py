@@ -135,28 +135,22 @@ class RAGAgent:
         """
         doc_result, _ = self.get_relevant_document(question)
         if doc_result:
-            prompt = self.prompt_template.format(
-                question=question,
-                context=doc_result.page_content
-            )
+            context = doc_result.page_content
         else:
-            prompt = self.prompt_template.format(
-                question=question,
-                context="No relevant documentation found."
-            )
+            context = "No relevant documentation found."
 
-        first_response = self.provider.generate(prompt, params)
+        system_instruction = self.prompt_template.format(context=context).strip()
+        first_messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": question},
+        ]
+        first_response = self.provider.chat(first_messages, params)
 
-        if "Child-friendly answer:" in first_response:
-            first_response = first_response.split("Child-friendly answer:")[-1].strip()
-        elif "Answer:" in first_response:
-            first_response = first_response.split("Answer:")[-1].strip()
-
-        child_prompt = self.child_prompt_template.format(original_answer=first_response)
-        final_response = self.provider.generate(child_prompt)
-
-        if "Child-friendly answer:" in final_response:
-            final_response = final_response.split("Child-friendly answer:")[-1].strip()
+        child_messages = [
+            {"role": "system", "content": self.child_prompt_template.strip()},
+            {"role": "user", "content": first_response},
+        ]
+        final_response = self.provider.chat(child_messages)
 
         return final_response
 
