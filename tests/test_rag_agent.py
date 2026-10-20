@@ -1,12 +1,29 @@
+# Copyright (C) 2026 Sugar Labs, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 """Tests for RAGAgent."""
 
 from unittest.mock import Mock
+
+import pytest
 
 from app.ai import RAGAgent
 
 
 def _make_agent():
-    return object.__new__(RAGAgent)
+    return RAGAgent(Mock())
 
 
 def test_get_relevant_document_returns_none_when_no_retriever():
@@ -78,22 +95,9 @@ def test_truncate_at_eos_returns_full_text_when_no_eos_present():
 
     assert result == "The answer is 42."
 
-import app.prompts as prompts
-
-
-def _make_agent_with_templates():
-    agent = _make_agent()
-    agent.prompt_template = prompts.PROMPT_TEMPLATE
-    agent.child_prompt_template = prompts.CHILD_FRIENDLY_PROMPT
-    agent.debug_prompt_template = prompts.CODE_DEBUG_PROMPT
-    agent.context_prompt_template = prompts.CODE_CONTEXT_PROMPT
-    agent.kids_debug_prompt_template = prompts.KIDS_DEBUG_PROMPT
-    agent.kids_context_prompt_template = prompts.KIDS_CONTEXT_PROMPT
-    return agent
-
 
 def test_run_uses_retrieved_context_when_relevant_doc_found():
-    agent = _make_agent_with_templates()
+    agent = _make_agent()
     fake_doc = Mock()
     fake_doc.page_content = "Pygame windows are created with pygame.display.set_mode()."
     agent.get_relevant_document = Mock(return_value=(fake_doc, 0.8))
@@ -112,7 +116,7 @@ def test_run_uses_retrieved_context_when_relevant_doc_found():
 
 
 def test_run_falls_back_when_no_relevant_doc_found():
-    agent = _make_agent_with_templates()
+    agent = _make_agent()
     agent.get_relevant_document = Mock(return_value=(None, 0.0))
 
     agent.provider = Mock()
@@ -144,11 +148,8 @@ def test_run_with_custom_prompt_wraps_provider_errors():
     agent.provider = Mock()
     agent.provider.generate.side_effect = RuntimeError("model crashed")
 
-    try:
+    with pytest.raises(Exception, match="model crashed"):
         agent.run_with_custom_prompt("question", "prompt")
-        assert False, "expected an exception to be raised"
-    except Exception as e:
-        assert "model crashed" in str(e)
 
 
 def test_run_chat_completion_delegates_to_provider_chat():
@@ -166,7 +167,7 @@ def test_run_chat_completion_delegates_to_provider_chat():
 
 
 def test_debug_without_context_runs_two_stage_generation():
-    agent = _make_agent_with_templates()
+    agent = _make_agent()
     agent.provider = Mock()
     agent.provider.generate.side_effect = [
         "raw debug output",
@@ -180,7 +181,7 @@ def test_debug_without_context_runs_two_stage_generation():
 
 
 def test_debug_with_context_runs_two_stage_generation():
-    agent = _make_agent_with_templates()
+    agent = _make_agent()
     agent.provider = Mock()
     agent.provider.generate.side_effect = [
         "raw context output",
