@@ -27,7 +27,7 @@ from app import create_app
 from app.ai import RAGAgent
 from app.providers import create_provider
 from app.database import get_db
-from app.auth import sync_env_keys_to_db
+from app.auth import load_db_keys, sync_env_keys_to_db
 from app.config import settings
 from app.routes import api
 
@@ -59,6 +59,7 @@ async def startup_event():
     active_model = get_active_model()
     db = next(get_db())
     sync_env_keys_to_db(db)
+    load_db_keys(db)
 
     logger.info(
         "Starting with provider=%s, model=%s",

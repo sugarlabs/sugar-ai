@@ -16,6 +16,7 @@ from authlib.integrations.starlette_client import OAuth
 from starlette.responses import RedirectResponse
 from dotenv import load_dotenv
 
+from app.config import settings
 from app.database import APIKey, get_db
 
 # load environment variables
@@ -142,3 +143,13 @@ def sync_env_keys_to_db(db: Session):
     except Exception as e:
         db.rollback()
         logger.error(f"Error syncing keys: {e}")
+
+def load_db_keys(db: Session) -> None:
+    """Make the database decide which keys work. Keys approved on the admin
+    page were only added in memory, so they stopped working at every restart,
+    and keys turned off there came back from API_KEYS."""
+    for key in db.query(APIKey).filter(APIKey.approved == True).all():
+        if key.is_active:
+            settings.API_KEYS[key.key] = {"name": key.name, "can_change_model": key.can_change_model}
+        else:
+            settings.API_KEYS.pop(key.key, None)
