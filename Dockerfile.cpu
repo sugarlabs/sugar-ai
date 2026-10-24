@@ -1,0 +1,22 @@
+# CPU-only image for running Sugar-AI against a hosted model (AI_PROVIDER=openai
+# or gemini). Only the document embeddings run locally, and they do not need a GPU.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt ./
+COPY requirements/ ./requirements/
+RUN pip install --no-cache-dir -r requirements/cpu.txt
+
+COPY *.py ./
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY docs/ ./docs/
+COPY app/ ./app/
+
+RUN mkdir -p /app/data
+
+EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
