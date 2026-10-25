@@ -72,7 +72,19 @@ class HuggingFaceProvider(BaseProvider):
                     model_name, use_quant, device)
 
     def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
-        """Generate text from a plain string prompt."""
+        """Generate text from a plain string prompt.
+
+        Wraps the prompt as a single user message and delegates to chat(),
+        so the model's chat template is applied consistently. Without this,
+        instruction-tuned models receive an unformatted prompt they were not
+        trained to continue from, which can produce empty or truncated output.
+
+        Falls back to the original raw-prompt behavior for models that do not
+        define a chat template on their tokenizer.
+        """
+        if getattr(self._pipeline.tokenizer, "chat_template", None):
+            return self.chat([{"role": "user", "content": prompt}], params)
+
         if params is None:
             params = GenerationParams()
 
