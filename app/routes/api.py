@@ -1,7 +1,7 @@
 """
 API routes for Sugar-AI.
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 import time
@@ -373,9 +373,14 @@ async def change_model(
 
 
 @router.get("/health")
-async def health_check():
-    """Check if the AI backend is alive and responsive."""
+async def health_check(response: Response):
+    """Check if the AI backend is alive and responsive.
+
+    Returns 503 when the backend cannot serve requests, so load balancers
+    and uptime monitors that only look at the status code see the failure.
+    """
     if agent is None:
+        response.status_code = 503
         return {"status": "unavailable", "detail": "Agent not initialized"}
 
     try:
@@ -389,6 +394,7 @@ async def health_check():
                 "model": model_name,
             }
         else:
+            response.status_code = 503
             return {
                 "status": "unhealthy",
                 "provider": type(agent.provider).__name__,
@@ -397,6 +403,7 @@ async def health_check():
             }
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")
+        response.status_code = 503
         return {
             "status": "error",
             "detail": str(e),
