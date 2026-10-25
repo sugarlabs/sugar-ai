@@ -37,6 +37,8 @@ document.addEventListener('DOMContentLoaded', function() {
         textElement.style.borderRadius = '15px 15px 0 15px';
         textElement.style.display = 'inline-block';
         textElement.style.maxWidth = '80%';
+        textElement.style.whiteSpace = 'pre-wrap';  // keep line breaks and indentation in pasted code
+        textElement.style.textAlign = 'left';
         textElement.textContent = message;
         
         messageElement.appendChild(textElement);
@@ -238,7 +240,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (chatInput) {
         chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
+            // Enter sends; Shift+Enter inserts a new line
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 const message = chatInput.value.trim();
                 if (message) {
                     sendMessage(message);
