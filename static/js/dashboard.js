@@ -44,6 +44,16 @@ document.addEventListener('DOMContentLoaded', function() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
     
+    // escape HTML special characters so text is displayed, not parsed as markup
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // add an AI message to the chat
     function addAIMessage(message) {
         const messageElement = document.createElement('div');
@@ -57,8 +67,8 @@ document.addEventListener('DOMContentLoaded', function() {
         textElement.style.display = 'inline-block';
         textElement.style.maxWidth = '80%';
         
-        // convert markdown-like syntax to HTML
-        let formattedMessage = message
+        // escape the model output first, then convert markdown-like syntax to HTML
+        let formattedMessage = escapeHtml(message)
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>')
