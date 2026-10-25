@@ -352,7 +352,6 @@ async def change_model(
     
     try:
         from app.providers import create_provider
-        from app.config import settings
         new_provider = create_provider(
             provider_name=settings.AI_PROVIDER,
             model_name=model,
