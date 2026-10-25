@@ -15,3 +15,5 @@ build/
 .docker/
 venv/
 .venv/
+# Generated FAISS vector store cache (see README "Persisting the FAISS index")
+faiss_index/

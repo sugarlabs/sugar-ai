@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     DOC_PATHS: List[str] = Field(default_factory=list)
     MAX_DAILY_REQUESTS: int = 100
 
+    # FAISS vector store persistence. The RAG document index is cached on disk
+    # so server restarts reuse it instead of re-embedding unchanged documents.
+    FAISS_INDEX_PATH: str = "faiss_index"
+    FAISS_REBUILD_INDEX: bool = os.getenv("FAISS_REBUILD_INDEX", "0") == "1"
+
     # Reasoning shares the output token budget with the answer. When think is on,
     # add this many tokens on top of the caller's max_length so reasoning cannot
     # starve the answer to empty. Tune per model (larger models need less).

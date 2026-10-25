@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """RAG and LLM components for Sugar-AI."""
+import json
 import os
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -33,6 +34,12 @@ EOS_TOKENS = (
     "</s>",
     "<eos>",
 )
+
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+# Fingerprint file stored next to the persisted FAISS index so a stale cache
+# (changed, added, or removed source documents) triggers a rebuild.
+FAISS_FINGERPRINT_FILE = "fingerprint.json"
 
 
 def format_docs(docs):
@@ -71,8 +78,76 @@ class RAGAgent:
             except Exception as e:
                 logger.warning("Failed to close previous provider: %s", e)
 
-    def setup_vectorstore(self, file_paths: List[str]) -> Optional[FAISS]:
-        """Load documents and create a vector store for retrieval."""
+    @staticmethod
+    def _fingerprint_sources(file_paths: List[str]) -> dict:
+        """Fingerprint the RAG sources so a stale cache triggers a rebuild."""
+        files = {}
+        for file_path in file_paths:
+            if os.path.exists(file_path):
+                stat = os.stat(file_path)
+                files[file_path] = {"mtime": stat.st_mtime, "size": stat.st_size}
+            else:
+                files[file_path] = {"missing": True}
+        return {"embedding_model": EMBEDDING_MODEL_NAME, "files": files}
+
+    @staticmethod
+    def _read_cached_fingerprint(index_path: str) -> Optional[dict]:
+        """Return the stored fingerprint, or None when it is unreadable."""
+        fingerprint_path = os.path.join(index_path, FAISS_FINGERPRINT_FILE)
+        try:
+            with open(fingerprint_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else None
+        except (OSError, ValueError):
+            return None
+
+    def _load_cached_vectorstore(
+        self, index_path: str, embeddings, fingerprint: dict
+    ) -> Optional[FAISS]:
+        """Return the persisted FAISS store when the cache is fresh, else None."""
+        if not os.path.isfile(os.path.join(index_path, "index.faiss")):
+            return None
+        if self._read_cached_fingerprint(index_path) != fingerprint:
+            logger.info("FAISS index at %s is stale; rebuilding", index_path)
+            return None
+        try:
+            # The index is generated locally by save_local, never downloaded,
+            # so deserializing its pickle payload is safe.
+            return FAISS.load_local(
+                index_path, embeddings, allow_dangerous_deserialization=True
+            )
+        except Exception as e:
+            logger.warning(
+                "Cached FAISS index at %s is unreadable (%s); rebuilding",
+                index_path,
+                e,
+            )
+            return None
+
+    def setup_vectorstore(
+        self, file_paths: List[str], index_path: Optional[str] = None
+    ) -> Optional[FAISS]:
+        """Load documents and create a vector store for retrieval.
+
+        The built index is persisted to ``index_path`` (defaults to
+        ``settings.FAISS_INDEX_PATH``) so server restarts reuse it instead of
+        re-embedding unchanged documents. A fingerprint of the source files is
+        stored next to the index; any change forces a rebuild.
+        """
+        index_path = index_path or settings.FAISS_INDEX_PATH
+
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+
+        fingerprint = self._fingerprint_sources(file_paths)
+        if settings.FAISS_REBUILD_INDEX:
+            logger.info("FAISS_REBUILD_INDEX is set; rebuilding vector store")
+        else:
+            cached = self._load_cached_vectorstore(index_path, embeddings, fingerprint)
+            if cached is not None:
+                logger.info("Loaded cached FAISS index from %s", index_path)
+                self.retriever = cached.as_retriever()
+                return self.retriever
+
         all_documents = []
         for file_path in file_paths:
             if os.path.exists(file_path):
@@ -83,12 +158,30 @@ class RAGAgent:
                 documents = loader.load()
                 all_documents.extend(documents)
 
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
+        if not all_documents:
+            logger.warning(
+                "No documents found in %s; retriever left unchanged", file_paths
+            )
+            return self.retriever
 
         vector_store = FAISS.from_documents(all_documents, embeddings)
         self.retriever = vector_store.as_retriever()
+        try:
+            vector_store.save_local(index_path)
+            with open(
+                os.path.join(index_path, FAISS_FINGERPRINT_FILE), "w", encoding="utf-8"
+            ) as f:
+                json.dump(fingerprint, f)
+        except OSError as e:
+            # Persistence is a best-effort optimization; the in-memory
+            # retriever above is fully functional without it.
+            logger.warning("Could not persist FAISS index to %s (%s)", index_path, e)
+        else:
+            logger.info(
+                "Built and cached FAISS index at %s (%d documents)",
+                index_path,
+                len(all_documents),
+            )
         return self.retriever
 
     def get_relevant_document(self, query: str, threshold: float = 0.5):
