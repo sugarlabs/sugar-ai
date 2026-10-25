@@ -125,9 +125,13 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
             
             # update API_KEYS in memory
             settings.API_KEYS[api_key] = {"name": new_key.name, "can_change_model": new_key.can_change_model}
-        else:
+        elif existing_key.approved and existing_key.is_active:
             # update in-memory API_KEYS for existing key
             settings.API_KEYS[existing_key.key] = {"name": existing_key.name, "can_change_model": existing_key.can_change_model}
+        else:
+            # a pending, denied or deactivated key must stay disabled;
+            # logging in must not undo the admin's decision
+            logger.warning(f"Not enabling unapproved or inactive API key for OAuth user: {email}")
         
         return RedirectResponse(url="/dashboard")
     except Exception as e:
