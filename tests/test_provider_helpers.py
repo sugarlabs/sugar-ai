@@ -143,4 +143,27 @@ def test_base_provider_has_no_known_eos_token():
     assert provider.get_eos_token() is None
 
 
-    
+def test_huggingface_provider_close_releases_the_model(monkeypatch):
+    """set_model() closes the provider it replaces. A local model keeps its
+    weights in memory for as long as the pipeline is referenced, so close()
+    has to drop it and hand cached GPU memory back."""
+    import weakref
+
+    from app.providers import huggingface
+
+    class Pipeline:
+        pass
+
+    emptied = []
+    monkeypatch.setattr(huggingface.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(huggingface.torch.cuda, "empty_cache", lambda: emptied.append(True))
+
+    # Skip __init__, which would download and load a real model.
+    provider = huggingface.HuggingFaceProvider.__new__(huggingface.HuggingFaceProvider)
+    provider._pipeline = Pipeline()
+    pipeline = weakref.ref(provider._pipeline)
+
+    provider.close()
+
+    assert pipeline() is None
+    assert emptied == [True]
