@@ -45,6 +45,7 @@ def test_prompted_request_has_expected_defaults():
     assert request.temperature == 0.7
     assert request.top_p == 0.9
     assert request.top_k == 50
+    assert request.think is False
 
 
 @pytest.mark.parametrize(
