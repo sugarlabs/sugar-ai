@@ -125,7 +125,7 @@ Sugar-AI provides three different endpoints for different use cases:
 |----------|---------|--------------|----------|
 | `/ask` | RAG-enabled answers | Query parameter | • Retrieval-Augmented Generation<br>• Sugar/Pygame/GTK documentation<br>• Child-friendly responses |
 | `/ask-llm` | Direct LLM without RAG | Query parameter | • No document retrieval<br>• Direct model access<br>• Faster responses<br>• Default system prompt and parameters |
-| `/ask-llm-prompted(promoted mode[default])` | Custom prompt with advanced controls | JSON body | • Custom system prompts<br>• Configurable model parameters |
+| `/ask-llm-prompted (prompted mode [default])` | Custom prompt with advanced controls | JSON body | • Custom system prompts<br>• Configurable model parameters |
 | `/ask-llm-prompted(chat=True)` | Accepts chat history with system prompt | JSON body | • Send chat history along with system prompt<br>• Configurable model parameters |
 
 - **GET endpoint**
@@ -288,13 +288,13 @@ Sugar-AI provides three different endpoints for different use cases:
 
     - Actual response of the model can be accessed by:
     ```py
-    data = json.loads(response)
+    data = response.json()
     content = data["choices"][0]["message"]["content"]
     print(content)
     ```
 
     **Use Cases:**
-    Prompted Mode: Different activites can now use different system prompts and different generation parameters to achieve a model that is personalized to that activites needs.  
+    Prompted Mode: Different activities can now use different system prompts and different generation parameters to achieve a model that is personalized to that activity's needs.  
     Chat Mode: They can also use the chat mode to give context of chat history to the LLM better suited for conversational style features.
 
     **Generation Parameter Guidelines:**
