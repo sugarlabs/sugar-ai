@@ -47,7 +47,7 @@ class GeminiProvider(BaseProvider):
             )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             timeout=_DEFAULT_TIMEOUT,
             headers={
                 "x-goog-api-key": api_key,
@@ -61,7 +61,7 @@ class GeminiProvider(BaseProvider):
             self.base_url,
         )
 
-    def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
+    async def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
         """Generate a response from chat messages."""
         if params is None:
             params = GenerationParams()
@@ -77,7 +77,7 @@ class GeminiProvider(BaseProvider):
                 "parts": [{"text": system_instruction}]
             }
 
-        response = self._client.post(
+        response = await self._client.post(
             f"{self.base_url}/models/{self.model_name}:generateContent",
             json=payload,
         )
@@ -85,10 +85,10 @@ class GeminiProvider(BaseProvider):
 
         return self._extract_text(response.json())
 
-    def health_check(self) -> bool:
+    async def health_check(self) -> bool:
         """Check if the endpoint is reachable and the key/model are valid."""
         try:
-            response = self._client.post(
+            response = await self._client.post(
                 f"{self.base_url}/models/{self.model_name}:generateContent",
                 json={
                     "contents": [{"role": "user", "parts": [{"text": "hi"}]}],

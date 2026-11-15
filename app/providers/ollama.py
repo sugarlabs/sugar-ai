@@ -39,7 +39,7 @@ class OllamaProvider(BaseProvider):
     def __init__(self, model_name: str, base_url: str = "http://localhost:11434"):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(timeout=_DEFAULT_TIMEOUT)
+        self._client = httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
 
         logger.info(
             "OllamaProvider initialized: model=%s, server=%s",
@@ -47,7 +47,7 @@ class OllamaProvider(BaseProvider):
             self.base_url,
         )
 
-    def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
+    async def generate(self, prompt: str, params: Optional[GenerationParams] = None) -> str:
         """Generate text from a plain string prompt."""
         if params is None:
             params = GenerationParams()
@@ -62,10 +62,10 @@ class OllamaProvider(BaseProvider):
         if params.think is not None:
             payload["think"] = params.think
 
-        data = self._post_with_think_fallback("/api/generate", payload)
+        data = await self._post_with_think_fallback("/api/generate", payload)
         return data.get("response", "").strip()
 
-    def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
+    async def chat(self, messages: list[dict], params: Optional[GenerationParams] = None) -> str:
         """Generate response from chat messages."""
         if params is None:
             params = GenerationParams()
@@ -80,18 +80,18 @@ class OllamaProvider(BaseProvider):
         if params.think is not None:
             payload["think"] = params.think
 
-        data = self._post_with_think_fallback("/api/chat", payload)
+        data = await self._post_with_think_fallback("/api/chat", payload)
         message = data.get("message", {})
         return message.get("content", "").strip()
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the underlying HTTP client."""
-        self._client.close()
+        await self._client.aclose()
 
-    def health_check(self) -> bool:
+    async def health_check(self) -> bool:
         """Check if the Ollama server is reachable and the model is available."""
         try:
-            response = self._client.post(
+            response = await self._client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model_name,
@@ -104,14 +104,14 @@ class OllamaProvider(BaseProvider):
         except Exception:
             return False
 
-    def _post_with_think_fallback(self, path: str, payload: dict) -> dict:
+    async def _post_with_think_fallback(self, path: str, payload: dict) -> dict:
         """POST to Ollama, retrying once without the think flag if it is rejected.
 
         Models that do not support reasoning reject a request carrying the
         think field, so drop it and retry to return a normal answer instead
         of failing.
         """
-        response = self._client.post(f"{self.base_url}{path}", json=payload)
+        response = await self._client.post(f"{self.base_url}{path}", json=payload)
 
         if "think" in payload and self._is_thinking_unsupported(response):
             payload.pop("think")
@@ -119,7 +119,7 @@ class OllamaProvider(BaseProvider):
                 "Model %s does not support thinking; retrying without it.",
                 self.model_name,
             )
-            response = self._client.post(f"{self.base_url}{path}", json=payload)
+            response = await self._client.post(f"{self.base_url}{path}", json=payload)
 
         response.raise_for_status()
         return response.json()

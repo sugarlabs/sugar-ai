@@ -30,6 +30,7 @@ def test_generation_params_have_expected_defaults():
     assert params.repetition_penalty == 1.1
     assert params.truncation is True
     assert params.do_sample is True
+    assert params.think is False
 
 
 @pytest.mark.parametrize(

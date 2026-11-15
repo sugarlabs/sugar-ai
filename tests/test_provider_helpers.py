@@ -15,6 +15,10 @@
 
 """Tests for provider helper methods."""
 
+from unittest.mock import AsyncMock, Mock
+
+import httpx
+
 from app.providers.base import BaseProvider, GenerationParams
 from app.providers.gemini import GeminiProvider
 from app.providers.ollama import OllamaProvider
@@ -58,6 +62,86 @@ def test_ollama_options_use_ollama_field_names():
         "top_k": 10,
         "repeat_penalty": 1.3,
     }
+
+
+async def test_ollama_generate_forwards_think_to_async_fallback():
+    provider = object.__new__(OllamaProvider)
+    provider.model_name = "test-model"
+    provider._post_with_think_fallback = AsyncMock(
+        return_value={"response": " reasoned answer "}
+    )
+
+    params = GenerationParams(think=True)
+
+    answer = await provider.generate("Explain gravity.", params)
+
+    assert answer == "reasoned answer"
+    provider._post_with_think_fallback.assert_awaited_once_with(
+        "/api/generate",
+        {
+            "model": "test-model",
+            "prompt": "Explain gravity.",
+            "stream": False,
+            "options": {
+                "num_predict": 1024,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "top_k": 50,
+                "repeat_penalty": 1.1,
+            },
+            "think": True,
+        },
+    )
+
+
+async def test_ollama_retries_without_think_when_model_rejects_it():
+    provider = object.__new__(OllamaProvider)
+    provider.model_name = "test-model"
+    provider.base_url = "http://ollama.example:11434"
+
+    unsupported = Mock(status_code=httpx.codes.BAD_REQUEST)
+    unsupported.json.return_value = {
+        "error": "model does not support thinking",
+    }
+    successful = Mock(status_code=httpx.codes.OK)
+    successful.json.return_value = {"response": "fallback answer"}
+
+    captured_payloads = []
+
+    async def post(url, json):
+        captured_payloads.append((url, json.copy()))
+        return unsupported if len(captured_payloads) == 1 else successful
+
+    client = Mock()
+    client.post = AsyncMock(side_effect=post)
+    provider._client = client
+    payload = {
+        "model": "test-model",
+        "prompt": "Explain gravity.",
+        "think": True,
+    }
+
+    data = await provider._post_with_think_fallback("/api/generate", payload)
+
+    assert data == {"response": "fallback answer"}
+    assert captured_payloads == [
+        (
+            "http://ollama.example:11434/api/generate",
+            {
+                "model": "test-model",
+                "prompt": "Explain gravity.",
+                "think": True,
+            },
+        ),
+        (
+            "http://ollama.example:11434/api/generate",
+            {
+                "model": "test-model",
+                "prompt": "Explain gravity.",
+            },
+        ),
+    ]
+    successful.raise_for_status.assert_called_once_with()
 
 
 def test_gemini_config_uses_gemini_field_names():
@@ -141,6 +225,3 @@ def test_base_provider_has_no_known_eos_token():
     provider = object.__new__(BaseProvider)
 
     assert provider.get_eos_token() is None
-
-
-    
