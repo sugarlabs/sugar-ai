@@ -1,4 +1,7 @@
-# Default profile for Windows and Linux contributors without NVIDIA CUDA.
+# Default profile for contributors without NVIDIA CUDA.
+# PyTorch publishes "+cpu" wheels only for Linux and Windows, so macOS
+# installs the regular PyPI wheel instead.
 --extra-index-url https://download.pytorch.org/whl/cpu
 -r base.txt
-torch==2.12.1+cpu
+torch==2.12.1+cpu; sys_platform != "darwin"
+torch==2.12.1; sys_platform == "darwin"
