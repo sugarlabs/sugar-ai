@@ -19,7 +19,9 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 import logging
 import hmac, hashlib
+import json
 import os
+from urllib.parse import parse_qs
 from dotenv import load_dotenv
 
 router = APIRouter(tags=["webhook"])
@@ -34,6 +36,9 @@ load_dotenv()
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 REPO_PATH_LOCALLY = os.getenv('REPO_PATH_LOCALLY')
 GIT_PATH = os.getenv('GIT_PATH')
+
+# Only pushes to this ref trigger a deploy
+DEPLOY_REF = "refs/heads/main"
 
 _webhook_configured = all([WEBHOOK_SECRET, REPO_PATH_LOCALLY, GIT_PATH])
 
@@ -76,6 +81,13 @@ def verify_github_signature(body: bytes, signature: str) -> bool:
         return False
 
 
+def get_push_ref(body: bytes, content_type: str):
+    """Return the ref of a GitHub push payload sent as JSON or form-encoded"""
+    if content_type.startswith('application/x-www-form-urlencoded'):
+        body = parse_qs(body.decode('utf-8')).get('payload', ['{}'])[0]
+    return json.loads(body).get('ref')
+
+
 @router.post("/webhook")
 async def webhook(request: Request):
     """GitHub webhook endpoint for handling repository updates"""
@@ -98,6 +110,17 @@ async def webhook(request: Request):
             raise HTTPException(status_code=403, detail="Signature verification failed")
         
         logger.info("Webhook signature verified successfully")
+        
+        # GitHub also signs pings, pushes to other branches or tags and any
+        # other subscribed event; only a push to main should redeploy
+        event = request.headers.get('X-GitHub-Event')
+        ref = get_push_ref(body, request.headers.get('Content-Type', '')) if event == 'push' else None
+        if ref != DEPLOY_REF:
+            logger.info(f"Ignoring webhook event '{event}' (ref: {ref})")
+            return JSONResponse(
+                status_code=200,
+                content={"status": "ignored", "message": f"No deploy for event '{event}' (ref: {ref})"},
+            )
         
         # Change to repository directory
         logger.info(f"Changing directory to: {REPO_PATH_LOCALLY}")
